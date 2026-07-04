@@ -4,8 +4,18 @@
 #include <DirectXMath.h>
 
 /**
- * @brief Unfied denoiser-upscaler utilising AMD FSR Ray Regeneration and Super Resolution with
- * DLSS-RR inputs. Extends FSR 3.1+ upscaler implementation.
+ * @brief Unified denoiser-upscaler utilising AMD FSR Ray Regeneration 1.2.0 and Super Resolution
+ * with DLSS-RR inputs. Extends FSR 3.1+ upscaler implementation.
+ * Updated for FidelityFX SDK 2.3.0 (FSR RR 1.2.0) breaking API changes:
+ *   - Removed Fuse mode API (FfxApiDenoiserMode, mode field, fused dispatch structs)
+ *   - Replaced camera component fields with view/projection matrices
+ *   - Switched to signed linearDepth convention
+ *   - Added per-signal dispatch descriptors (AO, DirectDiffuse, DirectSpecular,
+ *     IndirectDiffuse, IndirectSpecular, SpecularOcclusion, DominantLight)
+ *   - Added signalFlags and checkerboardSignalFlags to context creation
+ *   - Replaced fpMessage with ffxConfigureDescGlobalDebug
+ *   - Added linearDepthBounds passthrough field
+ *   - Added checkerboardOrigin to FfxApiDenoiserSignal
  */
 class FSRDFeatureDx12 : public FSR31FeatureDx12
 {
@@ -41,9 +51,9 @@ class FSRDFeatureDx12 : public FSR31FeatureDx12
 
         float AsArray[kCount];
 
-        static int GetKeyIndex(FfxApiConfigureDenoiserKey key) 
+        static int GetKeyIndex(FfxApiConfigureDenoiserKey key)
         {
-            return std::clamp((int) key - 1, 0, (int)DenoiserConfiguration::kCount);
+            return std::clamp((int) key - 1, 0, (int) DenoiserConfiguration::kCount);
         }
 
         static FfxApiConfigureDenoiserKey GetIndexKey(int index)
@@ -60,20 +70,23 @@ class FSRDFeatureDx12 : public FSR31FeatureDx12
     ffxContext _pDenoiserCtx;
     ffxCreateContextDescDenoiser _denoiserCtxDesc;
     DenoiserConfiguration _denoiserSettings;
-    bool _isMode2;
+
+    // SDK 2.3.0: signal and checkerboard flags replace 'mode'
+    uint32_t _signalFlags;
+    uint32_t _checkerboardSignalFlags;
 
     static bool s_isHWDepth;
     static bool s_isRoughnessPacked;
 
     FSRDConvDesc _convDesc;
-    DirectX::XMFLOAT3 _lastCamPos; // Last world space camera position
+    DirectX::XMFLOAT3 _lastCamPos;
 
     // Matrices
-    DirectX::XMMATRIX _invViewMatrix;   // Camera rotation and translation
-    DirectX::XMMATRIX _viewMatrix;      // World to camera space
-    DirectX::XMMATRIX _prevViewMatrix;  // Last world to camera space
-    DirectX::XMMATRIX _projMatrix;      // Perspective projection matrix
-    bool _isRightHanded;                // True if the camera matrix is right handed
+    DirectX::XMMATRIX _invViewMatrix;
+    DirectX::XMMATRIX _viewMatrix;
+    DirectX::XMMATRIX _prevViewMatrix;
+    DirectX::XMMATRIX _projMatrix;
+    bool _isRightHanded;
 
     std::unique_ptr<FSRDPreprocessor_Dx12> FSRDConvShader;
 
@@ -88,16 +101,16 @@ class FSRDFeatureDx12 : public FSR31FeatureDx12
     void UpdateSize();
 
     /**
-     * @brief Generates FFX denoiser configuration and input buffers from DLSS-RR inputs and NGX configurations.
-     * Converts and repacks resources internally.
+     * @brief Generates FFX denoiser configuration and per-signal dispatch descriptors from
+     * DLSS-RR inputs and NGX configurations (SDK 2.3.0 per-signal API).
      */
-    template<typename SignalDescT>
-    bool PrepareDenoiserInput(ID3D12GraphicsCommandList* InCommandList, const NVSDK_NGX_Parameter& ngxParams,
-                              ffxDispatchDescDenoiser& dispatchDesc, SignalDescT& signalDesc);
+    bool PrepareDenoiserInput(ID3D12GraphicsCommandList* InCommandList,
+                              const NVSDK_NGX_Parameter& ngxParams,
+                              ffxDispatchDescDenoiser& dispatchDesc,
+                              ffxDispatchDescDenoiserIndirectSpecular& signalDesc);
 
     /**
-     * @brief Retrieves DLSS-RR inputs to populate the inputs for the interop layer in order to generate
-     FSR-RR compatible buffers.
+     * @brief Retrieves DLSS-RR inputs to populate the inputs for the interop layer.
      */
     bool PrepareDenoiseConvInput(const NVSDK_NGX_Parameter& inParams);
 
