@@ -974,6 +974,7 @@ bool FSRDFeatureDx12::DispatchDenoiser(ID3D12GraphicsCommandList* InCommandList,
 
     LOG_DEBUG("Dispatching FSR-RR...");
     const ffxReturnCode_t result = FfxApiProxy::D3D12_Dispatch(&_pDenoiserCtx, &dispatchDesc.header);
+    LOG_DEBUG("Dispatch result: {0}", (UINT) result);
 
     if (result != FFX_API_RETURN_OK)
     {
