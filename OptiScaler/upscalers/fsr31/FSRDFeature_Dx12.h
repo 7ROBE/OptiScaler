@@ -1,5 +1,6 @@
 #pragma once
 #include "FSR31Feature_Dx12.h"
+#include "OptiTexts.h"
 #include "shaders/fsrd_preprocess/FSRDPreprocessor_Dx12.h"
 #include <DirectXMath.h>
 
@@ -22,7 +23,7 @@ class FSRDFeatureDx12 : public FSR31FeatureDx12
 
     Upscaler GetUpscalerType() const override { return Upscaler::FSRD; }
 
-    bool Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters) override;
+    bool EvaluateInternal(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters) override;
 
   private:
 

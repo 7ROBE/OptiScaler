@@ -47,15 +47,14 @@ class FSR31FeatureDx12 : public FSR31Feature, public IFeature_Dx12
      availability, and initializes helper shaders.
      * @return true if initialization succeeds.
      */
-    bool Init(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCommandList,
-              NVSDK_NGX_Parameter* InParameters) override;
+    bool InitInternal(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters) override;
 
     /**
      * @brief Executes the upscaling pass. Gathers input and output textures and configuration
      * from the NGX parameter table. Includes optional, user-configurable pre and post processing
      * steps for sharpening and scaling.
      */
-    bool Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters) override;
+    bool EvaluateInternal(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters) override;
 
   protected:
     bool _isInReset;
@@ -101,7 +100,7 @@ class FSR31FeatureDx12 : public FSR31Feature, public IFeature_Dx12
     /**
      * @brief Sets optional resource transition barriers. Used in conjunction with game quirk workarounds.
      */
-    virtual void SetConfigurableBarriers(ID3D12GraphicsCommandList* InCommandList) const;
+    virtual void SetConfigurableBarriers(ID3D12GraphicsCommandList* InCommandList);
 
     /**
      * @brief Resets optional resource transition barriers. Used in conjunction with game quirk workarounds.

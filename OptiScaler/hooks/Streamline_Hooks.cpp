@@ -1037,6 +1037,7 @@ sl::Result StreamlineHooks::hkslSetConstants(const sl::Constants& values, const 
     LOG_TRACE("called with frameIndex: {}, viewport: {}", (unsigned int) frame, (unsigned int) viewport);
 
     State::Instance().slFGInputs.setConstants(values, (uint32_t) frame);
+    State::Instance().slLastConstants = values;
 
     return o_slSetConstants(values, frame, viewport);
 }

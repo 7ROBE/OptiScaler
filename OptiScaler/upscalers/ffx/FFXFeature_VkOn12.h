@@ -34,7 +34,7 @@ class FFXFeatureVkOn12 : public FFXFeature, public IFeature_VkwDx12
         if (VulkanDevice)
             vkDeviceWaitIdle(VulkanDevice);
 
-        if (_upscaleCtx != nullptr)
-            FfxApiProxy::D3D12_DestroyContext(&_upscaleCtx, NULL);
+        if (_context != nullptr)
+            FfxApiProxy::D3D12_DestroyContext(&_context, NULL);
     }
 };

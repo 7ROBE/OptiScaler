@@ -140,6 +140,7 @@ class State
 
     // Streamline FG inputs
     Sl_Inputs_Dx12 slFGInputs = {};
+    sl::Constants slLastConstants = {};
     Sl1_Inputs_Dx12 s_sl1FGInputs {};
 
     // OptiFG

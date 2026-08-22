@@ -17,6 +17,8 @@
 #include <imgui/ImGuiNotify.hpp>
 
 #include <hooks/D3D12_Hooks.h>
+#include <misc/IdentifyGpu.h>
+#include <proxies/FfxApi_Proxy.h>
 
 #include <dxgi1_4.h>
 #include <shared_mutex>
@@ -646,7 +648,7 @@ static NVSDK_NGX_Result TryCreateOptiFeature(ID3D12GraphicsCommandList* InCmdLis
         upscalerBackend = GetUpscalerBackend();
         LOG_INFO("Creating {} upscaler feature", UpscalerDisplayName(upscalerBackend));
     }
-    else if (state.isRunningOnNvidia)
+    else if (IdentifyGpu::getPrimaryGpu().dlssCapable)
     {
         upscalerBackend = Upscaler::DLSSD;
         LOG_INFO("Creating DLSSD (Ray Reconstruction) feature");
@@ -905,7 +907,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetFeatureRequirements(
 
     // FSR Ray Regeneration support reporting (non-Nvidia GPUs)
     bool isRayRegenSupported = false;
-    if (!State::Instance().isRunningOnNvidia && FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_RayReconstruction)
+    if (!IdentifyGpu::getPrimaryGpu().dlssCapable && FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_RayReconstruction)
     {
         if (!FfxApiProxy::IsDenoiserReady())
             FfxApiProxy::InitFfxDx12();

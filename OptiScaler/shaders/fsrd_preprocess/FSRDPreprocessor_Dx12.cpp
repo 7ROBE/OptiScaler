@@ -8,7 +8,7 @@
 #include "precompile/FSRDOutputComp_Shader.h" 
 
 #include "dx12/ffx_api_dx12.h"
-#include <ffx_denoiser.h>
+#include <fsr-rr/ffx_denoiser.h>
 
 #include <d3dcompiler.h>
 #include <d3d12.h>

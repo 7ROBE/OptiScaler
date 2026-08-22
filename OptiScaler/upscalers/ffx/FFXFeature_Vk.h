@@ -29,7 +29,7 @@ class FFXFeatureVk : public FFXFeature, public IFeature_Vk
         if (State::Instance().isShuttingDown)
             return;
 
-        if (_upscaleCtx != nullptr)
-            FfxApiProxy::VULKAN_DestroyContext()(&_upscaleCtx, NULL);
+        if (_context != nullptr)
+            FfxApiProxy::VULKAN_DestroyContext()(&_context, NULL);
     }
 };

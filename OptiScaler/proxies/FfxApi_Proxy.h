@@ -17,7 +17,7 @@
 #include <detours/detours.h>
 #include <ffx_framegeneration.h>
 #include <ffx_upscale.h>
-#include <ffx_denoiser.h>
+#include <fsr-rr/ffx_denoiser.h>
 
 #include <magic_enum.hpp>
 
@@ -1084,11 +1084,7 @@ class FfxApiProxy
 
     static feature_version VersionTarget_RR()
     {
-        return {
-            .major = FFX_DENOISER_VERSION_MAJOR,
-            .minor = FFX_DENOISER_VERSION_MINOR,
-            .patch = FFX_DENOISER_VERSION_PATCH
-        };
+        return { FFX_DENOISER_VERSION_MAJOR, FFX_DENOISER_VERSION_MINOR, FFX_DENOISER_VERSION_PATCH };
     }
     static feature_version VersionDx12_RR()
     {

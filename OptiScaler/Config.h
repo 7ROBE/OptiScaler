@@ -304,6 +304,9 @@ class Config
     CustomOptional<float> Contrast { -0.3f };
 
     // DA Sharpening
+    CustomOptional<bool> UseDepthAwareSharpen { false };
+    CustomOptional<bool> UseDASDepthAwareSharpen { false };
+    CustomOptional<bool> DADepthIsLinear { false };
     CustomOptional<float, NoDefault> DADepthScale;
     CustomOptional<float, NoDefault> DADepthBias;
     CustomOptional<bool, NoDefault> DAClampOutput;
@@ -460,6 +463,7 @@ class Config
     CustomOptional<FSR4Support> Fsr4ForceModel { FSR4Support::None };
     CustomOptional<uint32_t, NoDefault> Fsr4Preset;
     CustomOptional<bool> Fsr4EnableWatermark { false };
+    CustomOptional<bool> Fsr4EnableDebugView { false };
     CustomOptional<bool> Fsr4DoNotLoadAmdxc64 { false };
 
     // FSR-RR

@@ -96,31 +96,28 @@ inline FSR31FeatureDx12::~FSR31FeatureDx12()
         FfxApiProxy::D3D12_DestroyContext(&_upscaleCtx, NULL);
 }
 
-bool FSR31FeatureDx12::Init(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCommandList,
-                            NVSDK_NGX_Parameter* InParameters)
+bool FSR31FeatureDx12::InitInternal(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters)
 {
     LOG_DEBUG("FSR31FeatureDx12::Init");
 
     if (IsInited())
         return true;
 
-    Device = InDevice;
-
     // Attempt to create the FSR context
     if (InitFSR3(InParameters))
     {
         // Initialize ImGui if not already disabled/created
         if (!Config::Instance()->OverlayMenu.value_or_default() && (Imgui == nullptr || Imgui.get() == nullptr))
-            Imgui = std::make_unique<Menu_Dx12>(Util::GetProcessWindow(), InDevice);
+            Imgui = std::make_unique<Menu_Dx12>(Util::GetProcessWindow(), Device);
 
         // OutputScaler: Handles resizing if FSR's internal upscaling isn't used or for custom scaling
-        OutputScaler = std::make_unique<OS_Dx12>("Output Scaling", InDevice, (TargetWidth() < DisplayWidth()));
+        OutputScaler = std::make_unique<OS_Dx12>("Output Scaling", Device, (TargetWidth() < DisplayWidth()));
 
         // RCAS: Robust Contrast Adaptive Sharpening
-        RCAS = std::make_unique<RCAS_Dx12>("RCAS", InDevice);
+        RCAS = std::make_unique<RCAS_Dx12>("RCAS", Device);
 
         // Bias: Handles DLSS bias -> reactive mask conversion, if enabled
-        Bias = std::make_unique<Bias_Dx12>("Bias", InDevice);
+        Bias = std::make_unique<Bias_Dx12>("Bias", Device);
 
         return true;
     }
@@ -359,7 +356,7 @@ uint64_t FSR31FeatureDx12::GetUpscalerOverrideID()
     return state.ffxUpscalerVersionIds[cfg.FfxUpscalerIndex.value_or_default()];
 }
 
-bool FSR31FeatureDx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters)
+bool FSR31FeatureDx12::EvaluateInternal(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters)
 {
     LOG_FUNC();
 
@@ -439,7 +436,7 @@ bool FSR31FeatureDx12::PrepareUpscalerInput(ID3D12GraphicsCommandList* InCommand
     if (!AutoExposure() && !_inputBuffers.ExposureMap)
     {
         LOG_DEBUG("AutoExposure disabled but ExposureTexture is missing. Forcing AutoExposure and re-initializing.");
-        state.AutoExposure = true;
+        Config::Instance()->AutoExposure = true;
         state.changeBackend[Handle()->Id] = true;
         return true;
     }
@@ -783,7 +780,7 @@ void FSR31FeatureDx12::PostProcess(ID3D12GraphicsCommandList* InCommandList, con
         // If scaling is next, write to the scaler's internal buffer. Otherwise, write to the final app texture.
         ID3D12Resource* rcasOutput = _isSuperScaling ? OutputScaler->Buffer() : _mainOutput;
 
-        if (!RCAS->Dispatch(Device, InCommandList, _upscalerOutput, _inputBuffers.MotionVectors, rcasConstants,rcasOutput))
+        if (!RCAS->Dispatch(InCommandList, _upscalerOutput, _inputBuffers.MotionVectors, rcasConstants,rcasOutput))
             // Fallback if dispatch fails
             cfg.RcasEnabled.set_volatile_value(false);
     }
@@ -797,7 +794,7 @@ void FSR31FeatureDx12::PostProcess(ID3D12GraphicsCommandList* InCommandList, con
         LOG_DEBUG("Scaling output...");
         OutputScaler->SetBufferState(InCommandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-        if (!OutputScaler->Dispatch(Device, InCommandList, OutputScaler->Buffer(), _mainOutput))
+        if (!OutputScaler->Dispatch(InCommandList, OutputScaler->Buffer(), _mainOutput))
         {
             cfg.OutputScalingEnabled.set_volatile_value(false);
             state.changeBackend[Handle()->Id] = true;
@@ -855,7 +852,7 @@ void FSR31FeatureDx12::GetReactiveAndTransparencyMasks(ID3D12GraphicsCommandList
                 {
                     Bias->SetBufferState(InCommandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-                    if (Bias->Dispatch(Device, InCommandList, inputs.DlssBiasMaskFallback,
+                    if (Bias->Dispatch(InCommandList, inputs.DlssBiasMaskFallback,
                                        cfg.DlssReactiveMaskBias.value_or_default(), Bias->Buffer()))
                     {
                         Bias->SetBufferState(InCommandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

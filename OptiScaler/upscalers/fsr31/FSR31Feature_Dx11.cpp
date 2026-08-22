@@ -145,7 +145,7 @@ bool FSR31FeatureDx11::Evaluate(ID3D11DeviceContext* DeviceContext, NVSDK_NGX_Pa
     if (!OutputScaler->IsInit())
         Config::Instance()->OutputScalingEnabled.set_volatile_value(false);
 
-    if (Config::Instance()->DADepthIsLinear.value_for_config_ignore_default() == std::nullopt)
+    if (Config::Instance()->DADepthIsLinear.value_for_config() == std::nullopt)
         Config::Instance()->DADepthIsLinear.set_volatile_value(false);
 
     ID3D11ShaderResourceView* restoreSRVs[D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT] = {};

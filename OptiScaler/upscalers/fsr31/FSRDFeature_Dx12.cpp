@@ -522,7 +522,7 @@ void FSRDFeatureDx12::UpdateSize()
     }
 }
 
-bool FSRDFeatureDx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters) 
+bool FSRDFeatureDx12::EvaluateInternal(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters) 
 {
     LOG_FUNC();
 
