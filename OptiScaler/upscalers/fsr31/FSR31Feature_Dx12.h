@@ -38,6 +38,10 @@ class FSR31FeatureDx12 : public FSR31Feature, public IFeature_Dx12
 
     std::string Name() const override { return FSR31Feature::Name(); }
 
+    Upscaler GetUpscalerType() const override { return Upscaler::FFX; }
+
+    API Api() const override { return API::DX12; }
+
     /**
      * @brief Initializes the FFX context, selects an FSR version based on configuration and
      availability, and initializes helper shaders.

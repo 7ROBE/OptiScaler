@@ -18,7 +18,9 @@ class FSRDFeatureDx12 : public FSR31FeatureDx12
 
     feature_version Version() override { return FSR31FeatureDx12::Version(); }
 
-    std::string Name() const override { return FSR31FeatureDx12::Name(); }
+    std::string Name() const override { return std::string(OptiTexts::FSR_RR_Name); }
+
+    Upscaler GetUpscalerType() const override { return Upscaler::FSRD; }
 
     bool Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters) override;
 

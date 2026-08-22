@@ -2,6 +2,7 @@
 #include "OS_Dx11.h"
 
 #include "OS_Common.h"
+#include "../Shader_Common.h"
 
 #define A_CPU
 // FSR compute shader is from : https://github.com/fholger/vrperfkit/
@@ -63,6 +64,7 @@ bool OS_Dx11::CreateBufferResource(ID3D11Device* InDevice, ID3D11Resource* InRes
         return false;
 
     D3D11_TEXTURE2D_DESC texDesc;
+    originalTexture->Release();
     originalTexture->GetDesc(&texDesc);
     auto targetWidth = texDesc.Width > InWidth ? texDesc.Width : InWidth;
     auto targetHeight = texDesc.Height > InHeight ? texDesc.Height : InHeight;
@@ -251,7 +253,7 @@ OS_Dx11::OS_Dx11(std::string InName, ID3D11Device* InDevice, bool InUpsample)
         // fsr upscaling
         if (Config::Instance()->OutputScalingDownscaler.value_or_default() == Scaler::FSR1)
         {
-            hr = _device->CreateComputeShader(reinterpret_cast<const void*>(FSR_EASU_cso), sizeof(FSR_EASU_cso),
+            hr = _device->CreateComputeShader(reinterpret_cast<const void*>(fsr_easu_cso), sizeof(fsr_easu_cso),
                                               nullptr, &_computeShader);
         }
         else
@@ -324,7 +326,7 @@ OS_Dx11::OS_Dx11(std::string InName, ID3D11Device* InDevice, bool InUpsample)
         // Compile shader blobs
         if (_upsample)
         {
-            shaderBlob = OS_CompileShader(upsampleCode.c_str(), "CSMain", "cs_5_0");
+            shaderBlob = CompileShader(upsampleCode.c_str(), "CSMain", "cs_5_0");
         }
         else
         {
@@ -334,35 +336,35 @@ OS_Dx11::OS_Dx11(std::string InName, ID3D11Device* InDevice, bool InUpsample)
             switch (Config::Instance()->OutputScalingDownscaler.value_or_default())
             {
             case Scaler::Bicubic:
-                shaderBlob = OS_CompileShader(downsampleCodeBC.c_str(), "CSMain", "cs_5_0");
+                shaderBlob = CompileShader(downsampleCodeBC.c_str(), "CSMain", "cs_5_0");
                 break;
 
             case Scaler::CatmullRom:
-                shaderBlob = OS_CompileShader(downsampleCodeCatmull.c_str(), "CSMain", "cs_5_0");
+                shaderBlob = CompileShader(downsampleCodeCatmull.c_str(), "CSMain", "cs_5_0");
                 break;
 
             case Scaler::Lanczos2:
-                shaderBlob = OS_CompileShader(downsampleCodeLanczos2.c_str(), "CSMain", "cs_5_0");
+                shaderBlob = CompileShader(downsampleCodeLanczos2.c_str(), "CSMain", "cs_5_0");
                 break;
 
             case Scaler::Lanczos3:
-                shaderBlob = OS_CompileShader(downsampleCodeLanczos3.c_str(), "CSMain", "cs_5_0");
+                shaderBlob = CompileShader(downsampleCodeLanczos3.c_str(), "CSMain", "cs_5_0");
                 break;
 
             case Scaler::Kaiser2:
-                shaderBlob = OS_CompileShader(downsampleCodeKaiser2.c_str(), "CSMain", "cs_5_0");
+                shaderBlob = CompileShader(downsampleCodeKaiser2.c_str(), "CSMain", "cs_5_0");
                 break;
 
             case Scaler::Kaiser3:
-                shaderBlob = OS_CompileShader(downsampleCodeKaiser3.c_str(), "CSMain", "cs_5_0");
+                shaderBlob = CompileShader(downsampleCodeKaiser3.c_str(), "CSMain", "cs_5_0");
                 break;
 
             case Scaler::Magic:
-                shaderBlob = OS_CompileShader(downsampleCodeMAGIC.c_str(), "CSMain", "cs_5_0");
+                shaderBlob = CompileShader(downsampleCodeMAGIC.c_str(), "CSMain", "cs_5_0");
                 break;
 
             default:
-                shaderBlob = OS_CompileShader(downsampleCodeBC.c_str(), "CSMain", "cs_5_0");
+                shaderBlob = CompileShader(downsampleCodeBC.c_str(), "CSMain", "cs_5_0");
                 break;
             }
         }
@@ -423,11 +425,7 @@ OS_Dx11::OS_Dx11(std::string InName, ID3D11Device* InDevice, bool InUpsample)
             }
         }
 
-        if (shaderBlob != nullptr)
-        {
-            shaderBlob->Release();
-            shaderBlob = nullptr;
-        }
+        SAFE_RELEASE(shaderBlob);
 
         if (FAILED(hr))
         {
@@ -463,18 +461,9 @@ OS_Dx11::~OS_Dx11()
     if (!_init || State::Instance().isShuttingDown)
         return;
 
-    if (_computeShader != nullptr)
-        _computeShader->Release();
-
-    if (_constantBuffer != nullptr)
-        _constantBuffer->Release();
-
-    if (_srvInput != nullptr)
-        _srvInput->Release();
-
-    if (_uavOutput != nullptr)
-        _uavOutput->Release();
-
-    if (_buffer != nullptr)
-        _buffer->Release();
+    SAFE_RELEASE(_computeShader);
+    SAFE_RELEASE(_constantBuffer);
+    SAFE_RELEASE(_srvInput);
+    SAFE_RELEASE(_uavOutput);
+    SAFE_RELEASE(_buffer);
 }
