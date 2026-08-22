@@ -312,6 +312,10 @@ bool Config::Reload(std::filesystem::path iniPath)
             FfxDenoiserMaxRadiance.set_from_config(readFloat("FSR-RR", "MaxRadiance"));
             FfxDenoiserRadianceClip.set_from_config(readFloat("FSR-RR", "RadianceClipDeviation"));
             FfxDenoiserGaussKernRelax.set_from_config(readFloat("FSR-RR", "GaussianKernelRelaxation"));
+            FsrRrLinearDepthBoundsMin.set_from_config(readFloat("FSR-RR", "LinearDepthBoundsMin"));
+            FsrRrLinearDepthBoundsMax.set_from_config(readFloat("FSR-RR", "LinearDepthBoundsMax"));
+            FsrRrDebugViewLinearDepthMin.set_from_config(readFloat("FSR-RR", "DebugViewLinearDepthMin"));
+            FsrRrDebugViewLinearDepthMax.set_from_config(readFloat("FSR-RR", "DebugViewLinearDepthMax"));
         }
 
         // XeSS
@@ -1158,6 +1162,14 @@ bool Config::SaveIni()
                      GetFloatValue(Instance()->FfxDenoiserRadianceClip.value_for_config()).c_str());
         ini.SetValue("FSR-RR", "GaussianKernelRelaxation",
                      GetFloatValue(Instance()->FfxDenoiserGaussKernRelax.value_for_config()).c_str());
+        ini.SetValue("FSR-RR", "LinearDepthBoundsMin",
+                     GetFloatValue(Instance()->FsrRrLinearDepthBoundsMin.value_for_config()).c_str());
+        ini.SetValue("FSR-RR", "LinearDepthBoundsMax",
+                     GetFloatValue(Instance()->FsrRrLinearDepthBoundsMax.value_for_config()).c_str());
+        ini.SetValue("FSR-RR", "DebugViewLinearDepthMin",
+                     GetFloatValue(Instance()->FsrRrDebugViewLinearDepthMin.value_for_config()).c_str());
+        ini.SetValue("FSR-RR", "DebugViewLinearDepthMax",
+                     GetFloatValue(Instance()->FsrRrDebugViewLinearDepthMax.value_for_config()).c_str());
     }
 
     // XeSS

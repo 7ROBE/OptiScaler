@@ -484,6 +484,9 @@ class Config
     CustomOptional<float> FsrRrLinearDepthBoundsMin { 0.1f };
     CustomOptional<float> FsrRrLinearDepthBoundsMax { 10000.0f };
 
+    CustomOptional<float> FsrRrDebugViewLinearDepthMin { 0.1f };
+    CustomOptional<float> FsrRrDebugViewLinearDepthMax { 500.0f };
+
     // FSR Common
     CustomOptional<float> FsrVerticalFov { 60.0f };
     CustomOptional<float> FsrHorizontalFov { 0.0f }; // off by default

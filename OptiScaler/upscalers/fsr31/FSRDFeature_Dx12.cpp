@@ -437,6 +437,24 @@ bool FSRDFeatureDx12::CreateDenoiserContext()
     // Query default settings
     SetDefaultConfiguration();
 
+#ifdef _DEBUG
+    // RR 1.2.0: override the absolute linear depth normalization bounds of the debug view.
+    if (_denoiserCtxDesc.flags & FFX_DENOISER_ENABLE_DEBUGGING)
+    {
+        const FfxApiFloatBounds dbgBounds = { cfg.FsrRrDebugViewLinearDepthMin.value_or_default(),
+                                              cfg.FsrRrDebugViewLinearDepthMax.value_or_default() };
+
+        ffxQueryDescDenoiserGetDefaultKeyValue boundsCfg = 
+        {
+            .header = { .type = FFX_API_CONFIGURE_DESC_TYPE_DENOISER_KEYVALUE },
+            .key = FFX_API_CONFIGURE_DENOISER_KEY_DEBUG_VIEW_LINEAR_DEPTH_BOUNDS,
+            .count = 1u,
+            .data = (void*) &dbgBounds
+        };
+        FfxApiProxy::D3D12_Configure(&_pDenoiserCtx, &boundsCfg.header);
+    }
+#endif
+
     // Create DLSS-RR to FSR-RR input converter
     FSRDConvShader = std::make_unique<FSRDPreprocessor_Dx12>("FSRD Converter", Device, _isMode2);
 
