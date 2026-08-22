@@ -432,13 +432,13 @@ bool FSR31FeatureDx12::PrepareUpscalerInput(ID3D12GraphicsCommandList* InCommand
                          _inputBuffers.DlssBiasMaskFallback);
     TryGetNGXVoidPointer(inParams, NVSDK_NGX_Parameter_ExposureTexture, _inputBuffers.ExposureMap);
 
-    // If not AutoExposure, we must have an exposure texture. If missing, force AutoExposure reset.
+    // If not AutoExposure, we must have an exposure texture. If missing, fall back to auto
+    // exposure for this frame - returning early here would leave the upscaler descriptor
+    // unfilled and crash the dispatch.
     if (!AutoExposure() && !_inputBuffers.ExposureMap)
     {
-        LOG_DEBUG("AutoExposure disabled but ExposureTexture is missing. Forcing AutoExposure and re-initializing.");
-        Config::Instance()->AutoExposure = true;
-        state.changeBackend[Handle()->Id] = true;
-        return true;
+        LOG_DEBUG("AutoExposure disabled but ExposureTexture is missing. Forcing AutoExposure.");
+        Config::Instance()->AutoExposure.set_volatile_value(true);
     }
 
     // Resolve Reactive & Transparency Masks
