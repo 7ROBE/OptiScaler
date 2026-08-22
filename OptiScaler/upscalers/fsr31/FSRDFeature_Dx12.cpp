@@ -746,9 +746,14 @@ bool FSRDFeatureDx12::PrepareDenoiserInput(ID3D12GraphicsCommandList* InCommandL
         .flags = FFX_DENOISER_DISPATCH_NON_GAMMA_ALBEDO
     };
 
-    memcpy(&dispatchDesc.view, &_viewMatrix, sizeof(float) * 16);
+    // RR 1.2.0 debug view shows banding with direct copies of NGX matrices - transpose.
+    const bool transpose = cfg.FsrRrTransposeMatrices.value_or_default();
+    const XMMATRIX viewOut = transpose ? XMMatrixTranspose(_viewMatrix) : _viewMatrix;
+    const XMMATRIX projOut = transpose ? XMMatrixTranspose(_projMatrix) : _projMatrix;
+
+    memcpy(&dispatchDesc.view, &viewOut, sizeof(float) * 16);
     // Must be the unjittered projection matrix
-    memcpy(&dispatchDesc.projection, &_projMatrix, sizeof(float) * 16);
+    memcpy(&dispatchDesc.projection, &projOut, sizeof(float) * 16);
 
     // Passthrough bounds on absolute linear depth. Wide defaults preserve previous behaviour,
     // configurable via FsrRrLinearDepthBoundsMin/Max.
@@ -888,6 +893,10 @@ bool FSRDFeatureDx12::PrepareDenoiseConvInput(const NVSDK_NGX_Parameter& inParam
             isReady = false;
         }
     }
+
+    // Derive handedness from the projection matrix: LH projects with w = +z, RH with w = -z.
+    // The Streamline fallback sets this, but the NGX-supplied matrix path never did.
+    _isRightHanded = _projMatrix.r[2].m128_f32[3] < 0.0f;
 
     return isReady;
 }

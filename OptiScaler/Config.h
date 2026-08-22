@@ -464,6 +464,7 @@ class Config
     CustomOptional<uint32_t, NoDefault> Fsr4Preset;
     CustomOptional<bool> Fsr4EnableWatermark { false };
     CustomOptional<bool> Fsr4EnableDebugView { false };
+    CustomOptional<bool> FsrRrTransposeMatrices { true }; // RR 1.2.0 debug view indicates NGX matrices need transposing
     CustomOptional<bool> Fsr4DoNotLoadAmdxc64 { false };
 
     // FSR-RR
