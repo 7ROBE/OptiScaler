@@ -477,6 +477,9 @@ class Config
     CustomOptional<float> FfxDenoiserCorrelationBias { 1.0f };
     CustomOptional<float> FfxDenoiserFloorIsolation { 1.0f };
 
+    CustomOptional<float> FsrRrLinearDepthBoundsMin { 0.1f };
+    CustomOptional<float> FsrRrLinearDepthBoundsMax { 10000.0f };
+
     // FSR Common
     CustomOptional<float> FsrVerticalFov { 60.0f };
     CustomOptional<float> FsrHorizontalFov { 0.0f }; // off by default

@@ -10,8 +10,8 @@ struct ID3D12Device;
 struct ID3D12GraphicsCommandList;
 struct ID3D12Resource;
 
-struct ffxDispatchDescDenoiserInput1Signal;
-struct ffxDispatchDescDenoiserInput2Signals;
+struct ffxDispatchDescDenoiserIndirectDiffuse;
+struct ffxDispatchDescDenoiserIndirectSpecular;
 struct ffxDispatchDescDenoiser;
 
 /**
@@ -169,17 +169,21 @@ class FSRDPreprocessor_Dx12
 
     /**
      * @brief Configures input/output resources after input conversion for FSR-RR with Mode-1 fused inputs.
+     * Fills the indirect diffuse signal descriptor and links it into the dispatch chain (RR 1.2.0 signal API).
      * Resources are transitioned to SRV state and valid until the next conversion or composition dispatch.
      * Must be re-acquired after each dispatch (lifetime managed internally).
      */
-    void GetSignal(ffxDispatchDescDenoiserInput1Signal& signalDesc, ffxDispatchDescDenoiser& dispatchDesc) const;
+    void GetSignal(ffxDispatchDescDenoiserIndirectDiffuse& diffuseDesc, ffxDispatchDescDenoiser& dispatchDesc) const;
 
     /**
      * @brief Configures input/output resources after input conversion for FSR-RR with Mode-2 discrete diffuse/specular color.
+     * Fills the indirect diffuse and specular signal descriptors and links them into the dispatch chain
+     * (head -> diffuse -> specular, RR 1.2.0 signal API).
      * Resources are transitioned to SRV state and valid until the next conversion or composition dispatch.
      * Must be re-acquired after each dispatch (lifetime managed internally).
      */
-    void GetSignal(ffxDispatchDescDenoiserInput2Signals& signalDesc, ffxDispatchDescDenoiser& dispatchDesc) const;
+    void GetSignal(ffxDispatchDescDenoiserIndirectDiffuse& diffuseDesc,
+                   ffxDispatchDescDenoiserIndirectSpecular& specularDesc, ffxDispatchDescDenoiser& dispatchDesc) const;
 
     /**
      * @brief Composes the denoised radiance from FSR-RR with the skip signal previously generated 

@@ -8,7 +8,7 @@
 #include "precompile/FSRDOutputComp_Shader.h" 
 
 #include "dx12/ffx_api_dx12.h"
-#include "fsr-rr/ffx_denoiser.h"
+#include <ffx_denoiser.h>
 
 #include <d3dcompiler.h>
 #include <d3d12.h>
@@ -529,14 +529,14 @@ struct FSRDPreprocessor_Dx12::Impl
         m_compShader.Dispatch(cmdList, cbData, inputs.AsArray, uavs, dstDim, false);
     }
 
-    void SetDescResources(ffxDispatchDescHeader& signalHeader, ffxDispatchDescDenoiser& dispatchDesc)
+    void SetDescResources(ffxDispatchDescDenoiser& dispatchDesc, ffxDispatchDescHeader* signalChain)
     {
         auto& outResources = m_out.Resources;
 
         dispatchDesc.header = 
         { 
             .type = FFX_API_DISPATCH_DESC_TYPE_DENOISER,
-            .pNext = &signalHeader // Link signal desc to main header
+            .pNext = signalChain // Link signal chain to main header
         };
 
         dispatchDesc.linearDepth = ffxApiGetResourceDX12(m_LinearDepth.Get(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
@@ -603,48 +603,54 @@ bool FSRDPreprocessor_Dx12::DispatchConversion(ID3D12GraphicsCommandList* cmdLis
     return false;
 }
 
-void FSRDPreprocessor_Dx12::GetSignal(ffxDispatchDescDenoiserInput1Signal& signalDesc,
+void FSRDPreprocessor_Dx12::GetSignal(ffxDispatchDescDenoiserIndirectDiffuse& diffuseDesc,
                                       ffxDispatchDescDenoiser& dispatchDesc) const
 {
     auto& outResources = m_impl->m_out.Resources;
     auto& signalData = outResources.Mode1Inputs;
 
-    signalDesc = 
+    diffuseDesc = 
     {
-        .header = { .type = FFX_API_DISPATCH_DESC_INPUT_1_SIGNAL_TYPE_DENOISER },
-        .radiance = 
+        .header = { .type = FFX_API_DISPATCH_DESC_TYPE_DENOISER_INDIRECT_DIFFUSE },
+        .signal = 
         {
             .input = ffxApiGetResourceDX12(signalData.Radiance.Get()),
             .output = ffxApiGetResourceDX12(m_impl->m_outputBuffer1.Get())
-        },
-        .fusedAlbedo = ffxApiGetResourceDX12(signalData.FusedAlbedo.Get())
+        }
     };
 
-    m_impl->SetDescResources(signalDesc.header, dispatchDesc);
+    m_impl->SetDescResources(dispatchDesc, &diffuseDesc.header);
 }
 
-void FSRDPreprocessor_Dx12::GetSignal(ffxDispatchDescDenoiserInput2Signals& signalDesc,
+void FSRDPreprocessor_Dx12::GetSignal(ffxDispatchDescDenoiserIndirectDiffuse& diffuseDesc,
+                                      ffxDispatchDescDenoiserIndirectSpecular& specularDesc,
                                       ffxDispatchDescDenoiser& dispatchDesc) const
 {
     auto& outResources = m_impl->m_out.Resources;
     auto& signalData = outResources.Mode2Inputs;
 
-    signalDesc = 
+    specularDesc = 
     {
-        .header = { .type = FFX_API_DISPATCH_DESC_INPUT_2_SIGNALS_TYPE_DENOISER }, 
-        .specularRadiance = 
+        .header = { .type = FFX_API_DISPATCH_DESC_TYPE_DENOISER_INDIRECT_SPECULAR }, 
+        .signal = 
         {
             .input = ffxApiGetResourceDX12(signalData.SpecRadiance.Get()),
             .output = ffxApiGetResourceDX12(m_impl->m_outputBuffer1.Get())
-        },
-        .diffuseRadiance = 
+        }
+    };
+
+    diffuseDesc = 
+    {
+        // Chain: head -> diffuse -> specular
+        .header = { .type = FFX_API_DISPATCH_DESC_TYPE_DENOISER_INDIRECT_DIFFUSE, .pNext = &specularDesc.header },
+        .signal = 
         {
             .input = ffxApiGetResourceDX12(signalData.DiffRadiance.Get()),
             .output = ffxApiGetResourceDX12(m_impl->m_outputBuffer2.Get())
-        },
+        }
     };
 
-    m_impl->SetDescResources(signalDesc.header, dispatchDesc);
+    m_impl->SetDescResources(dispatchDesc, &diffuseDesc.header);
 }
 
 bool FSRDPreprocessor_Dx12::DispatchComposition(ID3D12GraphicsCommandList* cmdList, const CompositionDesc& desc)
