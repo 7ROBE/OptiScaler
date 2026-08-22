@@ -3,6 +3,7 @@
 #include "SysUtils.h"
 #include "Util.h"
 #include "Config.h"
+#include "State.h"
 #include "Logger.h"
 
 #include <proxies/Ntdll_Proxy.h>
@@ -1096,7 +1097,8 @@ class FfxApiProxy
             ffxQueryDescGetVersions versionQuery {};
             versionQuery.header.type = FFX_API_QUERY_DESC_TYPE_GET_VERSIONS;
             versionQuery.createDescType = FFX_API_EFFECT_ID_DENOISER;
-            uint64_t versionCount = 0;
+            versionQuery.device = State::Instance().currentD3D12Device;
+        uint64_t versionCount = 0;
             versionQuery.outputCount = &versionCount;
 
             auto queryResult = denoiser_dx12.Query(nullptr, &versionQuery.header);
@@ -1145,6 +1147,7 @@ class FfxApiProxy
             ffxQueryDescGetVersions versionQuery {};
             versionQuery.header.type = FFX_API_QUERY_DESC_TYPE_GET_VERSIONS;
             versionQuery.createDescType = FFX_API_EFFECT_ID_RADIANCECACHE;
+            versionQuery.device = State::Instance().currentD3D12Device;
             uint64_t versionCount = 0;
             versionQuery.outputCount = &versionCount;
 
