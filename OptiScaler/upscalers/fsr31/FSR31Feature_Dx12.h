@@ -105,7 +105,7 @@ class FSR31FeatureDx12 : public FSR31Feature, public IFeature_Dx12
     /**
      * @brief Resets optional resource transition barriers. Used in conjunction with game quirk workarounds.
      */
-    virtual void ResetConfigurableBarriers(ID3D12GraphicsCommandList* InCommandList) const;
+    virtual void ResetConfigurableBarriers(ID3D12GraphicsCommandList* InCommandList);
 
   private:
     bool _isSuperScaling;

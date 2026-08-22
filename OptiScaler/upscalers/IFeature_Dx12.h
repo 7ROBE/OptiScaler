@@ -4,6 +4,7 @@
 
 #include "SysUtils.h"
 #include <Util.h>
+#include "Config.h"
 #include <menu/menu_dx12.h>
 #include <shaders/output_scaling/OS_Dx12.h>
 #include <shaders/rcas/RCAS_Dx12.h>
@@ -38,6 +39,13 @@ class IFeature_Dx12 : public virtual IFeature
 
     void ResourceBarrier(ID3D12GraphicsCommandList* InCommandList, ID3D12Resource* InResource,
                          D3D12_RESOURCE_STATES InBeforeState, D3D12_RESOURCE_STATES InAfterState) const;
+
+    bool TryResourceBarrier(ID3D12GraphicsCommandList* InCommandList, ID3D12Resource* InResource,
+                            const CustomOptional<int32_t, NoDefault>& InBeforeState,
+                            D3D12_RESOURCE_STATES InAfterState) const;
+    bool TryResourceBarrier(ID3D12GraphicsCommandList* InCommandList, ID3D12Resource* InResource,
+                            D3D12_RESOURCE_STATES InBeforeState,
+                            const CustomOptional<int32_t, NoDefault>& InAfterState) const;
 
     virtual bool InitInternal(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters) = 0;
     virtual bool EvaluateInternal(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX_Parameter* InParameters) = 0;

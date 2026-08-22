@@ -358,7 +358,7 @@ bool FSRDFeatureDx12::InitFSR3(const NVSDK_NGX_Parameter* InParameters)
 
 bool FSRDFeatureDx12::CreateDenoiserContext() 
 {
-    ScopedSkipSpoofing skipSpoofing {};
+    ScopedSkipSpoofingGlobal skipSpoofing {};
     auto& state = State::Instance();
     const auto& cfg = *Config::Instance();
 
@@ -410,8 +410,8 @@ bool FSRDFeatureDx12::CreateDenoiserContext()
         },
         .version = FFX_DENOISER_VERSION,
         .maxRenderSize = { RenderWidth(), RenderHeight() },
-        .signalFlags = _isMode2 ? (FFX_DENOISER_SIGNAL_INDIRECT_DIFFUSE | FFX_DENOISER_SIGNAL_INDIRECT_SPECULAR)
-                                : FFX_DENOISER_SIGNAL_INDIRECT_DIFFUSE,
+        .signalFlags = static_cast<uint32_t>(_isMode2 ? (FFX_DENOISER_SIGNAL_INDIRECT_DIFFUSE | FFX_DENOISER_SIGNAL_INDIRECT_SPECULAR)
+                                : FFX_DENOISER_SIGNAL_INDIRECT_DIFFUSE),
         // Full-res DLSS-RR inputs - no checkerboard reconstruction on the translation path
         .checkerboardSignalFlags = 0,
         .flags = 0
@@ -451,7 +451,7 @@ bool FSRDFeatureDx12::CreateDenoiserContext()
 
 bool FSRDFeatureDx12::QueryDenoiserVersions() 
 {
-    ScopedSkipSpoofing skipSpoofing {};
+    ScopedSkipSpoofingGlobal skipSpoofing {};
     auto& state = State::Instance();
 
     // Get version count

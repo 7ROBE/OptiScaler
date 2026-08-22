@@ -94,9 +94,9 @@ class FSRDFeatureDx12 : public FSR31FeatureDx12
      * @brief Generates FFX denoiser configuration and input buffers from DLSS-RR inputs and NGX configurations.
      * Converts and repacks resources internally.
      */
-    template<typename SignalDescT>
+    template<typename... SignalDescT>
     bool PrepareDenoiserInput(ID3D12GraphicsCommandList* InCommandList, const NVSDK_NGX_Parameter& ngxParams,
-                              ffxDispatchDescDenoiser& dispatchDesc, SignalDescT& signalDesc);
+                              ffxDispatchDescDenoiser& dispatchDesc, SignalDescT&... signalDesc);
 
     /**
      * @brief Retrieves DLSS-RR inputs to populate the inputs for the interop layer in order to generate

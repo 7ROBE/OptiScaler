@@ -130,6 +130,12 @@ enum class BufferType : uint64_t
 class StreamlineHooks
 {
   public:
+    static bool isSetConstantsHooked()
+    {
+        return o_slSetConstants != nullptr || o_slSetConstants_interposer_sl1 != nullptr || o_reflex_slSetConstants_sl1 != nullptr;
+    }
+
+
     typedef void* (*PFN_slGetPluginFunction)(const char* functionName);
     typedef bool (*PFN_slOnPluginLoad)(sl::param::IParameters* params, const char* loaderJSON, const char** pluginJSON);
     typedef sl::Result (*PFN_slSetData)(const sl::BaseStructure* inputs, sl::CommandBuffer* cmdBuffer);
@@ -215,11 +221,6 @@ class StreamlineHooks
     static bool hkslInit_sl1(const sl1::Preferences& pref, int applicationId);
     static bool hkslSetTag_sl1(const sl1::Resource* resource, sl1::BufferType tag, uint32_t id,
                                const sl1::Extent* extent);
-    static bool isSetConstantsHooked()
-    {
-        return o_slSetConstants != nullptr || o_slSetConstants_interposer_sl1 != nullptr || o_reflex_slSetConstants_sl1 != nullptr;
-    }
-
     static bool hkslSetConstants_sl1(const sl1::Constants& values, uint32_t frameIndex, uint32_t id);
     static bool hkslEvaluateFeature_sl1(sl1::CommandBuffer* cmdBuffer, sl1::Feature feature, uint32_t frameIndex,
                                         uint32_t id);

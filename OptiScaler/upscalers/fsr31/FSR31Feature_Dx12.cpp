@@ -317,7 +317,7 @@ void FSR31FeatureDx12::SetResolutionConfig()
 
 bool FSR31FeatureDx12::QueryUpscalerVersions()
 {
-    ScopedSkipSpoofing skipSpoofing {};
+    ScopedSkipSpoofingGlobal skipSpoofing {};
 
     auto& state = State::Instance();
 
@@ -366,7 +366,7 @@ bool FSR31FeatureDx12::EvaluateInternal(ID3D12GraphicsCommandList* InCommandList
     auto& cfg = *Config::Instance();
     const auto& inParams = *InParameters;
 
-    if (cfg.DADepthIsLinear.value_for_config_ignore_default() == std::nullopt)
+    if (cfg.DADepthIsLinear.value_for_config() == std::nullopt)
         cfg.DADepthIsLinear.set_volatile_value(false);
 
     // Validate helper features
@@ -876,7 +876,7 @@ void FSR31FeatureDx12::GetReactiveAndTransparencyMasks(ID3D12GraphicsCommandList
     inputs.ReactiveMask = activeReactiveMask;
 }
 
-void FSR31FeatureDx12::SetConfigurableBarriers(ID3D12GraphicsCommandList* InCommandList) const
+void FSR31FeatureDx12::SetConfigurableBarriers(ID3D12GraphicsCommandList* InCommandList)
 {
     const auto& state = State::Instance();
     auto& cfg = *Config::Instance();
@@ -907,7 +907,7 @@ void FSR31FeatureDx12::SetConfigurableBarriers(ID3D12GraphicsCommandList* InComm
     TryResourceBarrier(InCommandList, _mainOutput, cfg.OutputResourceBarrier, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 }
 
-void FSR31FeatureDx12::ResetConfigurableBarriers(ID3D12GraphicsCommandList* InCommandList) const
+void FSR31FeatureDx12::ResetConfigurableBarriers(ID3D12GraphicsCommandList* InCommandList)
 {
     const auto& cfg = *Config::Instance();
 

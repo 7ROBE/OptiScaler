@@ -284,6 +284,32 @@ bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX
     return evalResult;
 }
 
+bool IFeature_Dx12::TryResourceBarrier(ID3D12GraphicsCommandList* InCommandList, ID3D12Resource* InResource,
+                                       const CustomOptional<int32_t, NoDefault>& InBeforeState,
+                                       D3D12_RESOURCE_STATES InAfterState) const
+{
+    if (InCommandList != nullptr && InResource != nullptr && InBeforeState.has_value())
+    {
+        ResourceBarrier(InCommandList, InResource, (D3D12_RESOURCE_STATES) InBeforeState.value(), InAfterState);
+        return true;
+    }
+    else
+        return false;
+}
+
+bool IFeature_Dx12::TryResourceBarrier(ID3D12GraphicsCommandList* InCommandList, ID3D12Resource* InResource,
+                                       D3D12_RESOURCE_STATES InBeforeState,
+                                       const CustomOptional<int32_t, NoDefault>& InAfterState) const
+{
+    if (InCommandList != nullptr && InResource != nullptr && InAfterState.has_value())
+    {
+        ResourceBarrier(InCommandList, InResource, InBeforeState, (D3D12_RESOURCE_STATES) InAfterState.value());
+        return true;
+    }
+    else
+        return false;
+}
+
 IFeature_Dx12::IFeature_Dx12(unsigned int InHandleId, NVSDK_NGX_Parameter* InParameters) {}
 
 IFeature_Dx12::~IFeature_Dx12()
