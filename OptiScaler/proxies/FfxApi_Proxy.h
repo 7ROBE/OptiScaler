@@ -1095,7 +1095,7 @@ class FfxApiProxy
         {
             ffxQueryDescGetVersions versionQuery {};
             versionQuery.header.type = FFX_API_QUERY_DESC_TYPE_GET_VERSIONS;
-            versionQuery.createDescType = FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE;
+            versionQuery.createDescType = FFX_API_EFFECT_ID_DENOISER;
             uint64_t versionCount = 0;
             versionQuery.outputCount = &versionCount;
 
@@ -1144,7 +1144,7 @@ class FfxApiProxy
         {
             ffxQueryDescGetVersions versionQuery {};
             versionQuery.header.type = FFX_API_QUERY_DESC_TYPE_GET_VERSIONS;
-            versionQuery.createDescType = FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE;
+            versionQuery.createDescType = FFX_API_EFFECT_ID_RADIANCECACHE;
             uint64_t versionCount = 0;
             versionQuery.outputCount = &versionCount;
 
