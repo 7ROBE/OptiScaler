@@ -306,6 +306,7 @@ struct FSRDPreprocessor_Dx12::Impl
     {
         const XMFLOAT2 dispatchSize = { desc.RenderSize.x, desc.RenderSize.y };
         const bool isDepthLinear = (desc.Flags & (uint32_t) ConvFlags::IsDepthLinear);
+        const bool isRightHanded = (desc.Flags & (uint32_t) ConvFlags::RightHanded);
         ID3D12Resource* inColor = desc.Resources.InColor;
 
         for (int i = 0; i < FloorSeed::kPasses; i++)
@@ -316,7 +317,8 @@ struct FSRDPreprocessor_Dx12::Impl
                 .RenderSize = desc.RenderSize,
                 .NearPlane = desc.NearPlane,
                 .FarPlane = desc.FarPlane,
-                .Flags = isDepthLinear ? uint32_t(FloorSeed::Flags::LinearDepth) : 0u
+                .Flags = (isDepthLinear ? uint32_t(FloorSeed::Flags::LinearDepth) : 0u) |
+                          (isRightHanded ? uint32_t(FloorSeed::Flags::RightHanded) : 0u)
             };
             const auto cbData = GetAsByteSpan(constants);
 

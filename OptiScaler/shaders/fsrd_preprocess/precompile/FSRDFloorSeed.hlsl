@@ -21,6 +21,7 @@ static const uint2 s_ThreadGroupSize = uint2(THREAD_GROUP_SIZE_X, THREAD_GROUP_S
 
 // Flags
 #define FLAGS_LINEAR_DEPTH      (1 << 0)
+#define FLAGS_RIGHT_HANDED      (1 << 1)
 
 // 5x5 sorting filter config
 #define SORT_KERNEL_SIZE        5
@@ -200,18 +201,21 @@ float3 GetViewSpacePos(const int2 px)
     const float2 uv = (float2(px) + 0.5) * RenderSize.zw;
     float3 viewSpacePos = 0.0f;
     
+    // RR 1.2.0: linear depth is signed - the sign follows the view space facing direction.
+    const float depthSign = IsSet(FLAGS_RIGHT_HANDED) ? -1.0f : 1.0f;
+
     [branch]
     if (IsSet(FLAGS_LINEAR_DEPTH))
     {
         inDepth = clamp(inDepth, NearPlane, FarPlane);
         viewSpacePos = InvProjectPosition(float3(uv, 1.0f), InvProjMatrix);
         viewSpacePos.xy *= abs(inDepth / viewSpacePos.z);
-        viewSpacePos.z = abs(inDepth);
+        viewSpacePos.z = depthSign * inDepth;
     }
     else
     {
         viewSpacePos = InvProjectPosition(float3(uv, inDepth), InvProjMatrix);
-        viewSpacePos.z = clamp(abs(viewSpacePos.z), NearPlane, FarPlane);
+        viewSpacePos.z = SignedClampToRange(viewSpacePos.z, NearPlane, FarPlane);
     }
     
     return viewSpacePos;

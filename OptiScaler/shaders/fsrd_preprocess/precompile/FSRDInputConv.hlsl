@@ -19,6 +19,7 @@ static const uint2 s_ThreadGroupSize = uint2(THREAD_GROUP_SIZE_X, THREAD_GROUP_S
 
 #define FLAGS_PACKED_ROUGHNESS          (1 << 2)
 #define FLAGS_MODE_2_SIGNAL             (1 << 3)
+#define FLAGS_RIGHT_HANDED              (1 << 4)
 
 // Debug Flags
 #define FLAGS_DEBUG                     (1 << 16)
@@ -72,7 +73,7 @@ RWTexture2D<half4> OutSignal1 : register(u0);
 RWTexture2D<half4> OutSignal2 : register(u1);
 
 // ffxDispatchDescDenoiser
-RWTexture2D<half4> OutMotion : register(u2); // RG: Standard TSR motion vectors, B: Linear Depth Delta (CurrentLinearDepth - PrevLinearDepth)
+RWTexture2D<half4> OutMotion : register(u2); // RG: Standard TSR motion vectors, B: Signed Linear Depth Delta (PrevLinearDepth - CurrentLinearDepth)
 RWTexture2D<half4> OutNormals : register(u3); // RG: Octahedrally encoded normals, B: Linear Roughness, A: Material Type (Optional)
 RWTexture2D<half4> OutSpecAlbedo : register(u4); // RGB: Specular Albedo, A: dot(Normal, ViewDir)
 RWTexture2D<half4> OutDiffAlbedo : register(u5); // RGB: Diffuse Albedo, A: Metalness (not provided)
@@ -103,9 +104,12 @@ float3 GetViewSpacePos(const int2 px)
     const float2 uv = (float2(px) + 0.5) * DstTexSize.zw;
     float3 viewSpacePos = 0.0f;
     
+    // RR 1.2.0: linear depth is signed - the sign follows the view space facing direction.
+    const float depthSign = IsSet(FLAGS_RIGHT_HANDED) ? -1.0f : 1.0f;
+
     viewSpacePos = InvProjectPosition(float3(uv, 1.0f), InvProjMatrix);
     viewSpacePos.xy *= abs(inDepth / viewSpacePos.z);
-    viewSpacePos.z = inDepth;
+    viewSpacePos.z = depthSign * inDepth;
 
     return viewSpacePos;
 }
@@ -165,7 +169,7 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
 
     // Depth - full position needed for reprojected depth delta
     const float3 viewSpacePos = GetViewSpacePos(px);
-    const float compressedDepth = log(viewSpacePos.z + 1.0f) / log(FarPlane + 1.0f);
+    const float compressedDepth = log(abs(viewSpacePos.z) + 1.0f) / log(FarPlane + 1.0f);
     
     if (((compressedDepth < 0.99f) && totalAlbedo > 1e-2f) || IsSet(FLAGS_DEBUG))
     {        
@@ -191,7 +195,6 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
         // Find the current pixel in world space and calculate movement in view space
         const float3 worldSpacePos = mul(InvViewMatrix, float4(viewSpacePos, 1.0f)).xyz;
         float3 prevViewSpacePos = mul(PrevViewMatrix, float4(worldSpacePos, 1.0f)).xyz;
-        prevViewSpacePos.z = abs(prevViewSpacePos.z);
             
         // FSR-RR requires Linear Depth Delta in Blue channel
         const float2 motionIn = InMotionVectors[px].rg; // RG: Pixel Movement
@@ -307,7 +310,7 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
                     break;
                 
                 case FLAGS_DEBUG_OUT_LINEAR_DEPTH:
-                    debugColor = TurboColormap(frac(viewSpacePos.z * 0.1));
+                    debugColor = TurboColormap(frac(abs(viewSpacePos.z) * 0.1));
                     break;
                 
                 case FLAGS_DEBUG_OUT_MOTION:

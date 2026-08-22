@@ -892,6 +892,10 @@ bool FSRDFeatureDx12::ConvertDenoiserBuffers(ID3D12GraphicsCommandList* InComman
     if (s_isRoughnessPacked)
         _convDesc.Flags |= (uint32_t) FSRDConvFlags::IsRoughnessPacked;
 
+    // RR 1.2.0 expects signed linear depth - sign follows view space facing direction
+    if (_isRightHanded)
+        _convDesc.Flags |= (uint32_t) FSRDConvFlags::RightHanded;
+
     // Store in column major order for GPU
     XMStoreFloat4x4(&_convDesc.InvViewMatrix, XMMatrixTranspose(_invViewMatrix));
 

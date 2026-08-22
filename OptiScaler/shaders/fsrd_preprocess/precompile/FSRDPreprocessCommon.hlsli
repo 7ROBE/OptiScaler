@@ -168,6 +168,14 @@ half1 GetSafeFP16(float v)
     return (half) min(max(v, 0.0f), 65500.0f);
 }
 
+// Clamps the magnitude of a signed linear depth value to [nearPlane, farPlane], preserving its sign.
+// RR 1.2.0 uses signed linear depth - negative values occur for right-handed cameras looking down -Z.
+float SignedClampToRange(float z, float nearPlane, float farPlane)
+{
+    const float sgn = z < 0.0f ? -1.0f : 1.0f;
+    return sgn * clamp(abs(z), nearPlane, farPlane);
+}
+
 float Square(float x) { return x * x; }
 
 float2 Square(float2 vec) { return float2(vec.x * vec.x, vec.y * vec.y); }

@@ -11,7 +11,8 @@ namespace FSRD
         enum class Flags : uint32_t
         {
             None = 0,
-            LinearDepth = (1 << 0)
+            LinearDepth = (1 << 0),
+            RightHanded = (1 << 1)
         };
 
         struct alignas(16) Constants
