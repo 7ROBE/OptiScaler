@@ -299,16 +299,31 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             // Full luma-detail transfer at max DetailClamp: at DC >= 2 the output becomes
             // "denoised chroma + raw luminance" - detail preserved, colored speckle suppressed.
             const float detailAmount = saturate((DetailClamp - 0.5f) * 0.667f) * lerp(1.0f, darkGate, 0.6f);
-            outColor = GetSafeFP16(lerp(outColor, denoisedColor.rgb + lumaDir * lumaDelta * half(max(darkGate, 0.4h)), saturate(detailAmount)));
+            const half3 detailInjected = GetSafeFP16(denoisedColor.rgb + lumaDir * lumaDelta * half(max(darkGate, 0.4h)));
             
-            // Clamp final color within +/- DetailClamp of the denoiser output. The SSIM metric generally stays well 
-            // clear if this threshold, but not always. Tunable: higher keeps more raw micro-detail (reflections,
-            // specular edges), lower biases towards a cleaner but softer image.
-            const float clampLo = saturate(1.0f - DetailClamp);
-            const float clampHi = 1.0f + DetailClamp;
-            const half3 minColor = half3(clampLo * denoisedColor.rgb);
-            const half3 maxColor = half3(clampHi * denoisedColor.rgb);
-            outColor.rgb = clamp(outColor.rgb, minColor, maxColor);
+            [branch]
+            if (detailAmount >= 0.999f)
+            {
+                // Max detail mode: the injected result IS the output. Do NOT clamp it - the
+                // multiplicative clamp re-crushes exactly the high-frequency deltas we just
+                // restored (especially in dark areas where denoised base is tiny), which is
+                // what produced the vaseline look. Noise here is already controlled by the
+                // chroma separation and the dark gate.
+                outColor = detailInjected;
+            }
+            else
+            {
+                outColor = GetSafeFP16(lerp(outColor, detailInjected, saturate(detailAmount)));
+                
+                // Clamp final color within +/- DetailClamp of the denoiser output. Only applied
+                // on the blended path - this bounds raw noise proportionally to how much raw
+                // is mixed in.
+                const float clampLo = saturate(1.0f - DetailClamp);
+                const float clampHi = 1.0f + DetailClamp;
+                const half3 minColor = half3(clampLo * denoisedColor.rgb);
+                const half3 maxColor = half3(clampHi * denoisedColor.rgb);
+                outColor.rgb = clamp(outColor.rgb, minColor, maxColor);
+            }
             
             // Optional discrete premultiplied alpha buffer
             half4 particles = GetSafeFP16(InColorBeforeParticles[px]);
