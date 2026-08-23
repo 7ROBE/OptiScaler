@@ -611,19 +611,24 @@ bool FSRDFeatureDx12::EvaluateInternal(ID3D12GraphicsCommandList* InCommandList,
 
     // Pull configuration and input buffers for DLSS-RR from the param table, convert and 
     // repack input buffers into intermediate FSR-RR input buffers, and configure descriptors.
-    if (_isMode2)
+    // When the game isn't feeding RR inputs (RR disabled), skip the denoiser stage entirely -
+    // the upscaler below then consumes the game's raw color directly, i.e. plain FSR behavior.
+    if (!s_rrInputsMissing)
     {
-        if (!PrepareDenoiserInput(InCommandList, *InParameters, denoiserDesc, diffuseSignal, specularSignal))
-            return false;
-    }
-    else
-    {
-        if (!PrepareDenoiserInput(InCommandList, *InParameters, denoiserDesc, diffuseSignal))
-            return false;
+        if (_isMode2)
+        {
+            if (!PrepareDenoiserInput(InCommandList, *InParameters, denoiserDesc, diffuseSignal, specularSignal))
+                return false;
+        }
+        else
+        {
+            if (!PrepareDenoiserInput(InCommandList, *InParameters, denoiserDesc, diffuseSignal))
+                return false;
+        }
     }
 
     // Dispatch denoiser
-    if (!isDenoiseBypassed)
+    if (!isDenoiseBypassed && !s_rrInputsMissing)
     {
         ffxDispatchDescDenoiserDebugView dispatchDebugView = {};
 
@@ -737,7 +742,7 @@ bool FSRDFeatureDx12::EvaluateInternal(ID3D12GraphicsCommandList* InCommandList,
     }
 
     _frameCount++;
-    return isDenoiserReady || isDenoiseBypassed;
+    return isDenoiserReady || isDenoiseBypassed || s_rrInputsMissing;
 }
 
 template <typename... SignalDescT>
@@ -865,6 +870,19 @@ bool FSRDFeatureDx12::PrepareDenoiseConvInput(const NVSDK_NGX_Parameter& inParam
 
     if (!TryGetLoggedResource(inParams, NVSDK_NGX_Parameter_SpecularAlbedo, _convDesc.Resources.InSpecAlbedo))
         isReady = false;
+
+    // RR-input detection: DLSS-RR always feeds GBuffer normals + albedos. If they are absent the
+    // game has RR disabled and is only requesting plain upscaling - fall back to the FSR31 path
+    // (raw color -> upscaler) instead of denoising garbage. Sticky so we log once.
+    if (!_convDesc.Resources.InNormals || !_convDesc.Resources.InDiffAlbedo || !_convDesc.Resources.InSpecAlbedo)
+    {
+        if (!s_rrInputsMissing)
+        {
+            s_rrInputsMissing = true;
+            LOG_WARN("DLSS-RR inputs missing (normals/albedos). Falling back to plain FSR upscaling for this feature.");
+        }
+        return false;
+    }
 
     TryGetNGXVoidPointer(inParams, NVSDK_NGX_Parameter_DLSS_Input_Bias_Current_Color_Mask, _convDesc.Resources.InBiasMask);
 

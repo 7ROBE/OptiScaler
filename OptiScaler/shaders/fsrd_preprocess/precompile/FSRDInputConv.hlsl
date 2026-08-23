@@ -4,7 +4,7 @@
 #define MainRS \
     "RootFlags(0), " \
     "CBV(b0), " \
-    "DescriptorTable(SRV(t0, numDescriptors = 10), visibility = SHADER_VISIBILITY_ALL), " \
+    "DescriptorTable(SRV(t0, numDescriptors = 11), visibility = SHADER_VISIBILITY_ALL), " \
     "DescriptorTable(UAV(u0, numDescriptors = 7), visibility = SHADER_VISIBILITY_ALL), "
 
 // Dispatch config
@@ -61,6 +61,12 @@ Texture2D<half3> InSpecAlbedo : register(t7); // RGB - NVSDK_NGX_Parameter_GBuff
 Texture2D<half> InBiasMask : register(t8);
 
 Texture2D<half4> InFloorColor : register(t9);
+
+// Previous frame's floor (skip signal). Used to temporally stabilize the floor -
+// the per-frame spatial median of noisy input still carries noise which boils
+// when added back on top of the denoised output. Blending with the previous
+// floor (gated by similarity) removes that temporal noise.
+Texture2D<half4> InPrevFloorColor : register(t10);
 
 // FSR-RR - ffxDispatchDescDenoiserInput1Signal or ffxDispatchDescDenoiserInput2Signals
 //
@@ -150,6 +156,14 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
     // Denoiser input color and floor residual
     const float3 rawColor = GetSafeFP16(InColor[px].rgb);
     float4 floorColor = InFloorColor[px];  
+
+    // Temporal floor stabilization: the spatial median still carries per-frame noise.
+    // Blend towards the previous frame's floor where they agree - noise averages out,
+    // genuine lighting changes snap through via the similarity gate.
+    const float4 prevFloor = InPrevFloorColor[px];
+    const float floorTemporalSim = GetRelativeSimilarity(GetLuminance(floorColor.rgb), GetLuminance(prevFloor.rgb), 0.3f);
+    floorColor.rgb = GetSafeFP16(lerp(floorColor.rgb, prevFloor.rgb, floorTemporalSim * 0.65f));
+    
     const float rawLuma = GetLuminance(rawColor);
     const float floorLuma = GetLuminance(floorColor.rgb);
     floorColor.a = floorLuma;

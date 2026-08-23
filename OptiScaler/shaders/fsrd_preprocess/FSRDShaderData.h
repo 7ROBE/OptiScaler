@@ -170,6 +170,7 @@ namespace FSRD
                 ID3D12Resource* InBiasMask;    // R8 - NVSDK_NGX_Parameter_DLSS_Input_Bias_Current_Color_Mask
 
                 ID3D12Resource* InBlurColor;
+                ID3D12Resource* InPrevFloorColor; // Temporally smoothed floor from the previous frame (t10)
                 ID3D12Resource* InEdgeGuide;
             };
 

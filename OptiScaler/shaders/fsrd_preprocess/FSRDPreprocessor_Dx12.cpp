@@ -232,6 +232,9 @@ struct FSRDPreprocessor_Dx12::Impl
     // destroying reprojection data every frame (boiling / no visible denoising).
     ComPtr<ID3D12Resource> m_CompositionOutput;
 
+    // Previous frame's skip signal (temporally stabilized floor) - read by the packing shader
+    ComPtr<ID3D12Resource> m_FloorHistory;
+
     // Floor filter
     ID3D12Resource* m_smoothFloor;
 
@@ -284,6 +287,9 @@ struct FSRDPreprocessor_Dx12::Impl
         m_outputBuffer1 = CreateTex(FSRDFormats::OutputBuffer1, L"FSR_Conv_OutputBuffer1");
         m_outputBuffer2 = CreateTex(FSRDFormats::OutputBuffer2, L"FSR_Conv_OutputBuffer2");
         m_CompositionOutput = CreateTex(FSRDFormats::OutputBuffer1, L"FSR_Comp_Output");
+
+        // Temporal floor history - previous frame's skip signal for floor stabilization
+        m_FloorHistory = CreateTex(FSRDFormats::SkipSignal, L"FSR_Conv_FloorHistory");
 
         m_smoothFloor = nullptr;
 
@@ -415,12 +421,20 @@ struct FSRDPreprocessor_Dx12::Impl
         };
 
         in.Resources.InBlurColor = m_smoothFloor;
+        in.Resources.InPrevFloorColor = m_FloorHistory.Get();
 
         if (m_isMode2)
             packConstants.Flags |= UINT(ConvFlags::Mode2Signal);
 
         const std::span<const byte> convCBData((const byte*) &packConstants, sizeof(packConstants));
         m_convShader.Dispatch(cmdList, convCBData, in.AsArray, m_out.AsRawArray, dispatchSize, true);
+
+        // Copy the freshly written skip signal into the history for the next frame's
+        // temporal floor stabilization. SkipSignal is in UAV state after the dispatch.
+        AddBarrier(cmdList, m_out.Resources.SkipSignal.Get(), kUavState, kSrvState);
+        AddBarrier(cmdList, m_FloorHistory.Get(), kSrvState, D3D12_RESOURCE_STATE_COPY_DEST);
+        cmdList->CopyResource(m_FloorHistory.Get(), m_out.Resources.SkipSignal.Get());
+        AddBarrier(cmdList, m_FloorHistory.Get(), D3D12_RESOURCE_STATE_COPY_DEST, kSrvState);
     }
 
     void DispatchConversion(ID3D12GraphicsCommandList* cmdList, const ConversionDesc& desc) 
