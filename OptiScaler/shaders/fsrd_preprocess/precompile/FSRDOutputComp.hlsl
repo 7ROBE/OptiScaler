@@ -237,8 +237,16 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
         PopulateSharedMemory(groupID.xy, gtID.xy);
 
         // Correlate raw RT input with denoiser output
-        const half rawWeight = GetRawColorSimilarity(gtID.xy) * CorrelationBias;
-        
+        half rawWeight = GetRawColorSimilarity(gtID.xy) * CorrelationBias;
+
+        // Detail preservation floor: SSIM similarity between noisy raw and denoised is low
+        // exactly where detail lives (reflections, specular edges), so pure SSIM gating
+        // collapses to the blurry denoised image. Guarantee a minimum raw contribution that
+        // scales with DetailClamp - at the 0.5 default this adds nothing, above it progressively
+        // lets raw micro-detail through (the +-clamp below still bounds noise).
+        const float minRawBlend = saturate((DetailClamp - 0.5f) * 0.4f);
+        rawWeight = max(rawWeight, half(minRawBlend));
+
         [branch]
         if (IsSet(FLAGS_DEBUG))
         {

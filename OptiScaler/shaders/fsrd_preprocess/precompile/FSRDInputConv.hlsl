@@ -239,8 +239,10 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             floorColor.rgb += residual;
             
             // Mask out specular tracking if the surface isn't smooth enough
-            const float canUseHitDist = (roughness < 0.2f) * (1.0f - isEmissive);
-            hitDist = GetSafeFP16(InSpecHitDist[px] * canUseHitDist);
+            // Pass the real hit distance for all surfaces - zeroing it on rough/emissive pixels
+            // tells the denoiser "immediate hit", which corrupts temporal accumulation and
+            // blurs reflections. Emissive has no meaningful hit, keep a large sentinel instead.
+            hitDist = isEmissive ? half(0.0f) : GetSafeFP16(max(InSpecHitDist[px], 1e-4f));
             
             [branch]
             if (!IsSet(FLAGS_DEBUG))
