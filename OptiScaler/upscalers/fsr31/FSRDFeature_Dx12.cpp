@@ -748,11 +748,25 @@ bool FSRDFeatureDx12::PrepareDenoiserInput(ID3D12GraphicsCommandList* InCommandL
 
     // RR 1.2.0 debug view shows banding with direct copies of NGX matrices - transpose.
     const bool transpose = cfg.FsrRrTransposeMatrices.value_or_default();
+    XMMATRIX projOut = _projMatrix;
+
+    // RR 1.2.0 expects the UNJITTERED projection - the game's view-to-clip matrix has the
+    // camera jitter baked into its translation components. Strip it; the jitter is passed
+    // separately via dispatchDesc.jitterOffsets.
+    if (cfg.FsrRrUnjitterProjection.value_or_default())
+    {
+        float jitX = 0.0f, jitY = 0.0f;
+        inParams.Get(NVSDK_NGX_Parameter_Jitter_Offset_X, &jitX);
+        inParams.Get(NVSDK_NGX_Parameter_Jitter_Offset_Y, &jitY);
+
+        projOut.r[3].m128_f32[0] -= 2.0f * jitX / (float) RenderWidth();
+        projOut.r[3].m128_f32[1] += 2.0f * jitY / (float) RenderHeight();
+    }
+
     const XMMATRIX viewOut = transpose ? XMMatrixTranspose(_viewMatrix) : _viewMatrix;
-    const XMMATRIX projOut = transpose ? XMMatrixTranspose(_projMatrix) : _projMatrix;
+    projOut = transpose ? XMMatrixTranspose(projOut) : projOut;
 
     memcpy(&dispatchDesc.view, &viewOut, sizeof(float) * 16);
-    // Must be the unjittered projection matrix
     memcpy(&dispatchDesc.projection, &projOut, sizeof(float) * 16);
 
     // Passthrough bounds on absolute linear depth. Wide defaults preserve previous behaviour,
@@ -937,6 +951,21 @@ bool FSRDFeatureDx12::ConvertDenoiserBuffers(ID3D12GraphicsCommandList* InComman
     const ViewPlanes planes = GetViewPlanes(_projMatrix, DepthInverted());
     _convDesc.NearPlane = planes.nearPlane;
     _convDesc.FarPlane = planes.farPlane;
+
+    // Orientation diagnostics - one line every ~2s at 60fps
+    {
+        static unsigned int diagFrame = 0;
+        if (++diagFrame % 120u == 1u)
+        {
+            const bool depthInv = DepthInverted();
+            const bool rightHanded = _isRightHanded;
+            const bool hwDepth = s_isHWDepth;
+            const float proj23 = _projMatrix.r[2].m128_f32[3];
+
+            LOG_INFO("FSRD diag: near={0} far={1} depthInv={2} hwDepth={3} rh={4} proj23={5}",
+                     planes.nearPlane, planes.farPlane, depthInv, hwDepth, rightHanded, proj23);
+        }
+    }
 
     if (!s_isHWDepth)
         _convDesc.Flags |= (uint32_t) FSRDConvFlags::IsDepthLinear;

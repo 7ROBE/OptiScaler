@@ -465,6 +465,7 @@ class Config
     CustomOptional<bool> Fsr4EnableWatermark { false };
     CustomOptional<bool> Fsr4EnableDebugView { false };
     CustomOptional<bool> FsrRrTransposeMatrices { true }; // RR 1.2.0 debug view indicates NGX matrices need transposing
+    CustomOptional<bool> FsrRrUnjitterProjection { true }; // RR 1.2.0 wants the unjittered projection; strip NGX jitter
     CustomOptional<bool> Fsr4DoNotLoadAmdxc64 { false };
 
     // FSR-RR
