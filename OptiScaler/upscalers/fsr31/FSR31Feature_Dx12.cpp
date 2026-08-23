@@ -726,6 +726,20 @@ bool FSR31FeatureDx12::DispatchUpscaler(ID3D12GraphicsCommandList* InCommandList
     {
         LOG_ERROR("_dispatch error: {0}", FfxApiProxy::ReturnCodeToString(result));
 
+        // Diagnose INVALID_PARAMETER: dump the descriptor so the offending field is visible.
+        if (result == FFX_API_RETURN_ERROR_PARAMETER)
+        {
+            const auto& c = fsrParams.color;
+            const auto& o = fsrParams.output;
+            LOG_ERROR("Upscaler dispatch desc: color={0:x} ({1}x{2} fmt={3}) output={4:x} ({5}x{6} fmt={7}) "
+                      "colorMissing={8} outputMissing={9}",
+                      (uintptr_t) c.resource, (UINT) c.description.width, (UINT) c.description.height,
+                      (UINT) c.description.format,
+                      (uintptr_t) o.resource, (UINT) o.description.width, (UINT) o.description.height,
+                      (UINT) o.description.format,
+                      c.resource == nullptr, o.resource == nullptr);
+        }
+
         if (result == FFX_API_RETURN_ERROR_RUNTIME_ERROR)
         {
             LOG_WARN("Trying to recover by recreating the feature");

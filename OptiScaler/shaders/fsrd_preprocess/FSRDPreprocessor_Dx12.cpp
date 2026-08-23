@@ -226,6 +226,12 @@ struct FSRDPreprocessor_Dx12::Impl
     ComPtr<ID3D12Resource> m_outputBuffer1;
     ComPtr<ID3D12Resource> m_outputBuffer2;
 
+    // Dedicated composition output - MUST NOT alias any denoiser input resource.
+    // Previously the composed image was written into outResources.Motion, which is
+    // also bound as dispatchDesc.motionVectors for the NEXT frame's denoiser dispatch,
+    // destroying reprojection data every frame (boiling / no visible denoising).
+    ComPtr<ID3D12Resource> m_CompositionOutput;
+
     // Floor filter
     ID3D12Resource* m_smoothFloor;
 
@@ -277,12 +283,9 @@ struct FSRDPreprocessor_Dx12::Impl
         m_LinearDepth = CreateTex(FSRDFormats::LinearDepth, L"FSR_Conv_LinearDepth");
         m_outputBuffer1 = CreateTex(FSRDFormats::OutputBuffer1, L"FSR_Conv_OutputBuffer1");
         m_outputBuffer2 = CreateTex(FSRDFormats::OutputBuffer2, L"FSR_Conv_OutputBuffer2");
+        m_CompositionOutput = CreateTex(FSRDFormats::OutputBuffer1, L"FSR_Comp_Output");
 
         m_smoothFloor = nullptr;
-
-        // Scratch buffers
-        m_outputBuffer1 = CreateTex(FSRDFormats::OutputBuffer1, L"FSR_Conv_OutputBuffer1");
-        m_outputBuffer2 = CreateTex(FSRDFormats::OutputBuffer2, L"FSR_Conv_OutputBuffer2");
 
         if (m_isMode2)
         {
@@ -449,7 +452,8 @@ struct FSRDPreprocessor_Dx12::Impl
         {
             .DstTexSize = desc.DstTexSize,
             .CorrelationBias = desc.CorrelationBias,
-            .Flags = UINT(desc.Flags) 
+            .Flags = UINT(desc.Flags),
+            .DetailClamp = desc.DetailClamp
         };
 
         // Transition denoiser output buffers to SRV for composition
@@ -487,11 +491,18 @@ struct FSRDPreprocessor_Dx12::Impl
             };
         }  
 
-        std::array<ID3D12Resource*, 1> uavs { m_out.Resources.Motion.Get() };
+        std::array<ID3D12Resource*, 1> uavs { m_CompositionOutput.Get() };
         const std::span<const byte> cbData((const byte*) &constants, sizeof(constants));
         const XMFLOAT2 dstDim = { constants.DstTexSize.x, constants.DstTexSize.y };
 
+        // Composition output is created in SRV state; transition to UAV for the write.
+        AddBarrier(cmdList, m_CompositionOutput.Get(), kSrvState, kUavState);
+
         m_compShader.Dispatch(cmdList, cbData, inputs.AsArray, uavs, dstDim, true);
+
+        // Back to SRV - this texture is consumed as the upscaler color input
+        // (and by debug views) right after composition within the same command list.
+        AddBarriers(cmdList, uavs, kUavState, kSrvState);
     }
 
     void Blit(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* srcTex, ID3D12Resource* dstTex,
@@ -672,7 +683,7 @@ bool FSRDPreprocessor_Dx12::DispatchComposition(ID3D12GraphicsCommandList* cmdLi
 
 ID3D12Resource* FSRDPreprocessor_Dx12::GetCompositionOutput() const 
 { 
-    return m_impl->m_out.Resources.Motion.Get(); 
+    return m_impl->m_CompositionOutput.Get(); 
 }
 
 bool FSRDPreprocessor_Dx12::Blit(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* srcTex,

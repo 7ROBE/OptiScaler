@@ -128,6 +128,7 @@ class FSRDPreprocessor_Dx12
     {
         DirectX::XMFLOAT4 DstTexSize; // XY = Tex Size - ZW = 1 / XY
         float CorrelationBias; // Enhances the contribution of stable elements to the final image
+        float DetailClamp; // Raw-color deviation limit vs denoised output (0.5 = +/-50%)
         uint32_t Flags;
 
         ID3D12Resource* InRawColor;

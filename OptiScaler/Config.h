@@ -482,6 +482,7 @@ class Config
 
     CustomOptional<float> FfxDenoiserCorrelationBias { 1.0f };
     CustomOptional<float> FfxDenoiserFloorIsolation { 1.0f };
+    CustomOptional<float> FfxDenoiserDetailClamp { 0.5f }; // Raw-color clamp vs denoised (0.5 = +/-50%). Raise for more detail, lower for cleaner.
 
     CustomOptional<float> FsrRrLinearDepthBoundsMin { 0.1f };
     CustomOptional<float> FsrRrLinearDepthBoundsMax { 10000.0f };

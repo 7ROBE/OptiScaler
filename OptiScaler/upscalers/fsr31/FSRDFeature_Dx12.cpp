@@ -328,6 +328,20 @@ bool FSRDFeatureDx12::InitFSR3(const NVSDK_NGX_Parameter* InParameters)
 {
     LOG_FUNC();
 
+    // DLSS-RR games frequently don't provide an exposure texture. If the upscaler context is
+    // created without FFX_UPSCALE_ENABLE_AUTO_EXPOSURE and the exposure input turns out to be
+    // missing at dispatch time, every ffxDispatch fails with INVALID_PARAMETER (the runtime
+    // "force AutoExposure" fallback only flips the config value, not the already-created
+    // context flags). Force it and re-resolve init flags BEFORE any context is created -
+    // SetInitParameters already ran in the constructor, so it must be refreshed here.
+    if (!Config::Instance()->AutoExposure.has_value() ||
+        !Config::Instance()->AutoExposure.value())
+    {
+        Config::Instance()->AutoExposure.set_volatile_value(true);
+        SetInitParameters(const_cast<NVSDK_NGX_Parameter*>(InParameters));
+        LOG_INFO("FSRD: forced AutoExposure for upscaler context creation");
+    }
+
     // Init upscaler first - borrow some init boilerplate and some cfg
     if (FSR31FeatureDx12::InitFSR3(InParameters))
     {
@@ -646,6 +660,7 @@ bool FSRDFeatureDx12::EvaluateInternal(ID3D12GraphicsCommandList* InCommandList,
         { 
             .DstTexSize = _convDesc.RenderSize,
             .CorrelationBias = cfg.FfxDenoiserCorrelationBias.value_or_default(),
+            .DetailClamp = cfg.FfxDenoiserDetailClamp.value_or_default(),
             .Flags = (uint32_t)GetCompDebugFlags(dbgMode)
         };
 

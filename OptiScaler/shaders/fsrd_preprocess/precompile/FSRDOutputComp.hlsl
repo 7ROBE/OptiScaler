@@ -70,7 +70,8 @@ cbuffer CB_Comp : register(b0)
     float CorrelationBias;
     uint Flags;
     
-    float2 _Padding;
+    float DetailClamp;  // Raw-color deviation limit vs denoised output (0.5 = +/-50%). Higher keeps more raw micro-detail.
+    float _Padding2;
 }
 
 bool IsSet(uint mask) { return (Flags & mask) == mask; }
@@ -270,10 +271,13 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             const half4 rawColor = g_RawColor[smID.x][smID.y];
             half3 outColor = GetSafeFP16(lerp(denoisedColor.rgb, rawColor.rgb, rawWeight));
             
-            // Clamp final color within +/- 50% of the denoiser output. The SSIM metric generally stays well 
-            // clear if this threshold, but not always.
-            const half3 minColor = 0.5f * denoisedColor.rgb;
-            const half3 maxColor = 1.5f * denoisedColor.rgb;
+            // Clamp final color within +/- DetailClamp of the denoiser output. The SSIM metric generally stays well 
+            // clear if this threshold, but not always. Tunable: higher keeps more raw micro-detail (reflections,
+            // specular edges), lower biases towards a cleaner but softer image.
+            const float clampLo = saturate(1.0f - DetailClamp);
+            const float clampHi = 1.0f + DetailClamp;
+            const half3 minColor = half3(clampLo * denoisedColor.rgb);
+            const half3 maxColor = half3(clampHi * denoisedColor.rgb);
             outColor.rgb = clamp(outColor.rgb, minColor, maxColor);
             
             // Optional discrete premultiplied alpha buffer

@@ -241,7 +241,8 @@ namespace FSRD
             float CorrelationBias; // Controls the contribution of stable elements to the final image
             uint32_t Flags;
 
-            float _Padding[2];
+            float DetailClamp; // Raw-color deviation limit vs denoised output (0.5 = +/-50%)
+            float _Padding[1];
         };  
 
         /**

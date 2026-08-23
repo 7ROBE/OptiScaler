@@ -2998,6 +2998,10 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
                     ImGui::SliderFloat("Floor Isolation", &v, 0, 1))
                     config->FfxDenoiserFloorIsolation = v;
 
+                if (float v = config->FfxDenoiserDetailClamp.value_or_default();
+                    ImGui::SliderFloat("Detail Clamp", &v, 0.1f, 2.0f))
+                    config->FfxDenoiserDetailClamp = v;
+
                 ImGui::PopItemWidth();
             }
         }

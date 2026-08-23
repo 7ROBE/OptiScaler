@@ -318,6 +318,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             FsrRrDebugViewLinearDepthMax.set_from_config(readFloat("FSR-RR", "DebugViewLinearDepthMax"));
             FsrRrTransposeMatrices.set_from_config(readBool("FSR-RR", "TransposeMatrices"));
             FsrRrUnjitterProjection.set_from_config(readBool("FSR-RR", "UnjitterProjection"));
+            FfxDenoiserDetailClamp.set_from_config(readFloat("FSR-RR", "DetailClamp"));
         }
 
         // XeSS
@@ -1176,6 +1177,8 @@ bool Config::SaveIni()
                      GetBoolValue(Instance()->FsrRrTransposeMatrices.value_for_config()).c_str());
         ini.SetValue("FSR-RR", "UnjitterProjection",
                      GetBoolValue(Instance()->FsrRrUnjitterProjection.value_for_config()).c_str());
+        ini.SetValue("FSR-RR", "DetailClamp",
+                     GetFloatValue(Instance()->FfxDenoiserDetailClamp.value_for_config()).c_str());
     }
 
     // XeSS
