@@ -295,8 +295,11 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             const half3 lumaDir = denoisedColor.rgb * rcp(max(denLuma, 1e-3h)); // per-channel direction
             
             half3 outColor = GetSafeFP16(lerp(denoisedColor.rgb, rawColor.rgb, rawWeight));
-            const float detailAmount = saturate((DetailClamp - 0.5f)) * 0.6f * darkGate;
-            outColor = GetSafeFP16(lerp(outColor, denoisedColor.rgb + lumaDir * lumaDelta * half(darkGate), saturate(detailAmount)));
+            
+            // Full luma-detail transfer at max DetailClamp: at DC >= 2 the output becomes
+            // "denoised chroma + raw luminance" - detail preserved, colored speckle suppressed.
+            const float detailAmount = saturate((DetailClamp - 0.5f) * 0.667f) * lerp(1.0f, darkGate, 0.6f);
+            outColor = GetSafeFP16(lerp(outColor, denoisedColor.rgb + lumaDir * lumaDelta * half(max(darkGate, 0.4h)), saturate(detailAmount)));
             
             // Clamp final color within +/- DetailClamp of the denoiser output. The SSIM metric generally stays well 
             // clear if this threshold, but not always. Tunable: higher keeps more raw micro-detail (reflections,
