@@ -287,11 +287,16 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             const half rawLuma = GetLuminance(rawColor.rgb);
             const half denLuma = GetLuminance(denoisedColor.rgb);
             const half lumaDelta = rawLuma - denLuma;
+            
+            // Dark-area noise gate: relative luminance deviation explodes in near-black regions
+            // where a small absolute delta is a huge relative one. Scale injection down as the
+            // base gets darker so shadows keep their denoised cleanliness.
+            const float darkGate = saturate(denLuma * 8.0f);
             const half3 lumaDir = denoisedColor.rgb * rcp(max(denLuma, 1e-3h)); // per-channel direction
             
             half3 outColor = GetSafeFP16(lerp(denoisedColor.rgb, rawColor.rgb, rawWeight));
-            const float detailAmount = saturate((DetailClamp - 0.5f)) * 0.6f;
-            outColor = GetSafeFP16(lerp(outColor, denoisedColor.rgb + lumaDir * lumaDelta, saturate(detailAmount)));
+            const float detailAmount = saturate((DetailClamp - 0.5f)) * 0.6f * darkGate;
+            outColor = GetSafeFP16(lerp(outColor, denoisedColor.rgb + lumaDir * lumaDelta * half(darkGate), saturate(detailAmount)));
             
             // Clamp final color within +/- DetailClamp of the denoiser output. The SSIM metric generally stays well 
             // clear if this threshold, but not always. Tunable: higher keeps more raw micro-detail (reflections,

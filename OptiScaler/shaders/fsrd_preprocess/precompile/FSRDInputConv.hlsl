@@ -158,9 +158,16 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
     float4 floorColor = InFloorColor[px];  
 
     // Temporal floor stabilization: the spatial median still carries per-frame noise.
-    // Blend towards the previous frame's floor where they agree - noise averages out,
-    // genuine lighting changes snap through via the similarity gate.
-    const float4 prevFloor = InPrevFloorColor[px];
+    // Sample the previous floor at the REPROJECTED position (motion vectors point from the
+    // current pixel to where this surface was last frame) - without reprojection the blend
+    // compares unrelated pixels while moving and the gate collapses, bringing back boiling
+    // exactly during motion. Off-screen or invalid samples fall back to the current floor.
+    const float2 mv = InMotionVectors[px].rg; // pixel movement, current -> previous
+    const float2 prevCoord = float2(px) + mv;
+    const bool inBounds = all(prevCoord >= 0.0f) && prevCoord.x < DstTexSize.x && prevCoord.y < DstTexSize.y;
+    const float4 reprojFloor = inBounds ? InPrevFloorColor[int2(prevCoord)] : floorColor;
+
+    const float4 prevFloor = reprojFloor;
     const float floorTemporalSim = GetRelativeSimilarity(GetLuminance(floorColor.rgb), GetLuminance(prevFloor.rgb), 0.3f);
     floorColor.rgb = GetSafeFP16(lerp(floorColor.rgb, prevFloor.rgb, floorTemporalSim * 0.65f));
     
