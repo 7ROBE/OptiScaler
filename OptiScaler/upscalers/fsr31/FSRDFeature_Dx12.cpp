@@ -434,6 +434,17 @@ bool FSRDFeatureDx12::CreateDenoiserContext()
         }
     }
 
+    // RR 1.2.0: logging/validation output is installed via ffxConfigureDescGlobalDebug
+    // (per-effect routing) - replaces the 1.x create-desc fpMessage.
+    ffxConfigureDescGlobalDebug debugCfg = 
+    {
+        .header = { .type = FFX_API_CONFIGURE_DESC_TYPE_GLOBALDEBUG },
+        .effectId = FFX_API_EFFECT_ID_DENOISER,
+        .fpMessage = &FfxLogCallback,
+        .debugLevel = FFX_API_CONFIGURE_GLOBALDEBUG_LEVEL_VERBOSE
+    };
+    FfxApiProxy::D3D12_Configure(&_pDenoiserCtx, &debugCfg.header);
+
     // Query default settings
     SetDefaultConfiguration();
 

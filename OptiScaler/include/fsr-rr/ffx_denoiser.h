@@ -119,6 +119,18 @@ typedef struct FfxApiFloatBounds
     float max; ///< Upper bound of the interval.
 } FfxApiFloatBounds;
 
+// FFX SDK 2.3 type-7 debug configure struct (absent from legacy ffx-api headers).
+#ifndef FFX_API_CONFIGURE_DESC_TYPE_GLOBALDEBUG
+#define FFX_API_CONFIGURE_DESC_TYPE_GLOBALDEBUG 7u
+struct ffxConfigureDescGlobalDebug
+{
+    ffxConfigureDescHeader header;
+    uint64_t               effectId;
+    ffxApiMessage          fpMessage;
+    uint32_t               debugLevel;
+};
+#endif // FFX_API_CONFIGURE_DESC_TYPE_GLOBALDEBUG
+
 #endif // FFX_API_FSRD_COMPAT_2_3
 
 //------------------------------------------------------------------------------
