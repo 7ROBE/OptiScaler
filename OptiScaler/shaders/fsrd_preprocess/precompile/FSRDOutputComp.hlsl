@@ -277,7 +277,21 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
         {
             const half4 denoisedColor = g_DenoisedColor[smID.x][smID.y];
             const half4 rawColor = g_RawColor[smID.x][smID.y];
+            
+            // Detail recovery with noise control. Raw detail and raw noise are entangled in the
+            // same buffer - blending full RGB at high weights brings both. Instead, transfer the
+            // raw HIGH-FREQUENCY LUMINANCE on top of the denoised base and keep the denoised
+            // CHROMA: human vision is far less sensitive to chroma noise than luma detail, so
+            // this preserves perceived sharpness (texture, reflection edges) while most of the
+            // visible noise (colored speckle) stays suppressed.
+            const half rawLuma = GetLuminance(rawColor.rgb);
+            const half denLuma = GetLuminance(denoisedColor.rgb);
+            const half lumaDelta = rawLuma - denLuma;
+            const half3 lumaDir = denoisedColor.rgb * rcp(max(denLuma, 1e-3h)); // per-channel direction
+            
             half3 outColor = GetSafeFP16(lerp(denoisedColor.rgb, rawColor.rgb, rawWeight));
+            const float detailAmount = saturate((DetailClamp - 0.5f)) * 0.6f;
+            outColor = GetSafeFP16(lerp(outColor, denoisedColor.rgb + lumaDir * lumaDelta, saturate(detailAmount)));
             
             // Clamp final color within +/- DetailClamp of the denoiser output. The SSIM metric generally stays well 
             // clear if this threshold, but not always. Tunable: higher keeps more raw micro-detail (reflections,
