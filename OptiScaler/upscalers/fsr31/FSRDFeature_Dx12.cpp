@@ -1108,19 +1108,25 @@ bool FSRDFeatureDx12::DispatchDenoiser(ID3D12GraphicsCommandList* InCommandList,
         FSRD::AddBarriers(InCommandList, std::span<ID3D12Resource* const>(nrcAll), noMips,
                     D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
+        LOG_WARN("NRC step 1: barriers done");
+        
         // 1. Fill prediction/training query buffers from the converted signals
+        LOG_WARN("NRC step 2: dispatching query shader");
         FSRDConvShader->DispatchNrcQuery(InCommandList,
             FSRDConvShader->GetLinearDepth(),
             FSRDConvShader->GetOutputNormals(),
             FSRDConvShader->GetOutputDiffAlbedo(),
             nrcBufA.Get(), Device,
             RenderWidth() * RenderHeight() / 4);
+        LOG_WARN("NRC step 3: query shader dispatched");
 
         // Training targets: the denoised composition output (texture) bound directly as the
         // NRC trainTargets resource - no intermediate copy needed.
         nrcTrainTgtRes = ffxApiGetResourceDX12(FSRDConvShader->GetCompositionOutput(),
                                                FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
-        DispatchNrc(InCommandList, false); // training disabled: trainTargets must be a BUFFER, texture binding TDRs the device
+        LOG_WARN("NRC step 4: calling NRC dispatch (inference)");
+        DispatchNrc(InCommandList, false);
+        LOG_WARN("NRC step 5: NRC dispatch returned");
 
         FSRD::AddBarriers(InCommandList, std::span<ID3D12Resource* const>(nrcAll), noMips,
                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
