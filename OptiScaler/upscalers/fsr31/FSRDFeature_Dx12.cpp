@@ -1063,6 +1063,12 @@ bool FSRDFeatureDx12::DispatchDenoiser(ID3D12GraphicsCommandList* InCommandList,
     if (TryUpdateOption(cfg.FfxDenoiserGaussKernRelax, _denoiserSettings.m_GaussianKernelRelaxation))
         ApplyConfiguration(FFX_API_CONFIGURE_DENOISER_KEY_GAUSSIAN_KERNEL_RELAXATION);
 
+    static uint32_t s_diagCounter = 0;
+    if ((s_diagCounter++ % 120) == 0)
+        LOG_INFO("FSRD settings dump: MaxRadiance cfg={0:.1f} member={1:.1f} | RadianceClip cfg={2:.1f} member={3:.1f}",
+                 cfg.FfxDenoiserMaxRadiance.value_or_default(), _denoiserSettings.m_MaxRadiance,
+                 cfg.FfxDenoiserRadianceClip.value_or_default(), _denoiserSettings.m_RadianceClipStdK);
+
     LOG_DEBUG("Dispatching FSR-RR...");
     // Temporal-accumulation instrumentation: frameIndex/reset/jitter/renderSize pattern
     // names a dead-accumulation bug instantly (see boiling investigation).
@@ -1230,6 +1236,7 @@ ffxReturnCode_t FSRDFeatureDx12::SetDefaultConfiguration(FfxApiConfigureDenoiser
     };
 
     const ffxReturnCode_t code = FfxApiProxy::D3D12_Query(&_pDenoiserCtx, &queryDesc.header);
+    LOG_INFO("FSRD QueryDefault key=0x{0:X} default={1:.3f} result={2}", (uint64_t)key, _denoiserSettings.GetMember(key), (UINT)code);
     return code;
 }
 
