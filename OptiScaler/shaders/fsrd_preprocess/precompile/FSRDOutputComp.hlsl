@@ -306,7 +306,11 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             // Raw-blend gate: rawWeight (SSIM) fluctuates frame-to-frame at 1spp, re-injecting
             // noise even with DetailClamp = 0. Scale the raw contribution by DetailClamp so the
             // denoised base is pure below 0.5 and raw detail returns progressively above it.
-            rawWeight *= saturate((DetailClamp - 0.5f) * 2.0f);
+            // Shadow-aware raw gate: raw blend is for detail in LIT areas. In shadows (low
+            // denoised luminance) the raw signal is pure 1-spp noise - fireflies + boiling.
+            // Scale the raw contribution down with the denoised base brightness.
+            const float shadowGate = saturate(denLuma * 10.0f); // full detail above ~0.1, none near black
+            rawWeight *= saturate((DetailClamp - 0.5f) * 2.0f) * lerp(0.15f, 1.0f, shadowGate);
             half3 outColor = GetSafeFP16(lerp(denoisedColor.rgb, rawColor.rgb, rawWeight));
             
             // Full luma-detail transfer at max DetailClamp: at DC >= 2 the output becomes
