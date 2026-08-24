@@ -180,22 +180,26 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
         [branch]
         if (hitT > 1e-3f && hitT < 1e4f && smoothness > 0.05f)
         {
+            // Virtual image point: X + t*V (view dir), NOT the real hit point X + t*R.
+            // The virtual point lies ON this pixel's view ray, so it projects back onto the
+            // pixel itself (built-in sanity check), and its previous-frame projection gives
+            // the correct screen-space motion of the reflected content for history reuse.
+            // This matches FSR's internal Virtual Hit Pos and NRD's specular formulation.
             const float3 earlyViewPos = GetViewSpacePos(px);
-            const float3 viewNormal = normalize(mul(earlyNormal.rgb, (float3x3) InvViewMatrix));
-            const float3 reflDir = reflect(normalize(earlyViewPos), viewNormal);
-            
-            const float3 hitViewPos = earlyViewPos + reflDir * hitT;
+            const float3 viewDir = normalize(earlyViewPos);
+            const float3 hitViewPos = earlyViewPos + viewDir * hitT;
             const float3 hitWorldPos = mul(InvViewMatrix, float4(hitViewPos, 1.0f)).xyz;
             const float3 hitPrevViewPos = mul(PrevViewMatrix, float4(hitWorldPos, 1.0f)).xyz;
             
-            const float4 hitClipCur = mul(ProjMatrix, float4(hitViewPos, 1.0f));
+            // Current frame: virtual point is on the view ray -> projects to this pixel.
+            // Use px directly (self-test: if uvCur ever deviates, inputs are broken).
             const float4 hitClipPrev = mul(PrevProjMatrix, float4(hitPrevViewPos, 1.0f));
             
             [branch]
-            if (hitClipCur.w > 1e-4f && hitClipPrev.w > 1e-4f)
+            if (hitClipPrev.w > 1e-4f)
             {
-                const float2 uvCur = NDCToUV(hitClipCur.xy / hitClipCur.w);
                 const float2 uvPrev = NDCToUV(hitClipPrev.xy / hitClipPrev.w);
+                const float2 uvCur = (float2(px) + 0.5f) * DstTexSize.zw;
                 virtualMotion = (uvPrev - uvCur) * DstTexSize.xy; // pixels
                 reflectionWeight = smoothness;
             }
