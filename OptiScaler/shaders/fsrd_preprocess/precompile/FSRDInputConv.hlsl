@@ -164,12 +164,31 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
     // exactly during motion. Off-screen or invalid samples fall back to the current floor.
     const float2 mv = InMotionVectors[px].rg; // pixel movement, current -> previous
     const float2 prevCoord = float2(px) + mv;
-    const bool inBounds = all(prevCoord >= 0.0f) && prevCoord.x < DstTexSize.x && prevCoord.y < DstTexSize.y;
-    const float4 reprojFloor = inBounds ? InPrevFloorColor[int2(prevCoord)] : floorColor;
-
+    const bool inBounds = all(prevCoord >= 0.0f) && prevCoord.x < DstTexSize.x - 1 && prevCoord.y < DstTexSize.y - 1;
+    
+    // Bilinear reprojected sample - nearest-int sampling shimmers on subpixel motion,
+    // which re-introduces boiling during slow camera movement.
+    float4 reprojFloor = floorColor;
+    if (inBounds)
+    {
+        const float2 f = frac(prevCoord);
+        const int2 c = int2(floor(prevCoord));
+        const int2 cp = min(c + int2(1, 1), int2(DstTexSize.xy) - 1);
+        reprojFloor = lerp(
+            lerp(InPrevFloorColor[c],              InPrevFloorColor[int2(cp.x, c.y)],  f.x),
+            lerp(InPrevFloorColor[int2(c.x, cp.y)], InPrevFloorColor[cp],   f.x),
+            f.y);
+        // note: second lerp row uses (c.x, cp.y) and (cp.x, cp.y)
+    }
+    
     const float4 prevFloor = reprojFloor;
     const float floorTemporalSim = GetRelativeSimilarity(GetLuminance(floorColor.rgb), GetLuminance(prevFloor.rgb), 0.3f);
-    floorColor.rgb = GetSafeFP16(lerp(floorColor.rgb, prevFloor.rgb, floorTemporalSim * 0.65f));
+    
+    // Velocity-adaptive history weight: slow motion keeps maximum temporal stability,
+    // fast motion damps history to avoid ghost trails.
+    const float mvLen = length(mv);
+    const float velocityDamp = saturate(1.0f - mvLen / 12.0f); // 12px+ movement -> no history weight
+    floorColor.rgb = GetSafeFP16(lerp(floorColor.rgb, prevFloor.rgb, floorTemporalSim * lerp(0.5f, 0.85f, velocityDamp)));
     
     const float rawLuma = GetLuminance(rawColor);
     const float floorLuma = GetLuminance(floorColor.rgb);
