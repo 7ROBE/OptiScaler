@@ -272,6 +272,18 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
     const float floorSimilarity = GetRelativeSimilarity(floorLuma, rawLuma, similarityThreshold);
     floorColor.rgb = FloorIsolation * lerp(floorColor.rgb, rawColor, saturate(floorSimilarity));
     floorColor.rgb = min(rawColor, floorColor.rgb);
+
+    // Raw-leak clamp: the raw microcontrast blend above (and any invalid-texel fallback) can pass
+    // 1-spp spikes into the floor in dark regions where SNR is lowest. Bound the floor to a band
+    // around its pre-blend temporal estimate so shadows can't inherit raw fireflies.
+    {
+        const float preBlendLuma = max(GetLuminance(prevFloor.rgb), 0.02f);
+        float3 clamped = floorColor.rgb;
+        const float fl = GetLuminance(clamped);
+        if (fl > preBlendLuma * 3.0f)
+            clamped *= half((preBlendLuma * 3.0f) / fl);
+        floorColor.rgb = clamped;
+    }
     
     // Signal denoising pre-pass: compress fireflies/outliers in the residual BEFORE demodulation.
     // The demod division (color / albedo) amplifies any residual noise by 1/albedo - a single bright
@@ -363,24 +375,24 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             // residual noise up to 50x - the root cause of dark-threshold collapse and shadow
             // boiling. Floor the divisor so amplification never exceeds 20x (1/0.05).
             // Hue-preserving: scalar divide by luminance-based floor, not per-channel max.
-            const float specDiv = max(GetLuminance(specReflectance.rgb), 0.05f);
-            const float diffDiv = max(GetLuminance(diffAlbedo.rgb), 0.05f);
+            const float specDiv = max(GetLuminance(specReflectance.rgb), 0.1f);
+            const float diffDiv = max(GetLuminance(diffAlbedo.rgb), 0.1f);
             half3 demodSpecular = GetSafeFP16(specularColor / specDiv);
             half3 demodDiffuse = GetSafeFP16(diffuseColor / diffDiv);
 
-            // Post-demod soft-knee: clamp in the SAME domain the denoiser receives. Pre-demod
-            // compression was re-inflated by the divide (0.05 spike / 0.05 divisor = 1.0 spike).
-            // Threshold scales with the signal's own brightness + absolute floor.
+            // Post-demod soft-knee: LOCAL, referenced to the floor estimate at this texel.
+            // A global limit can't span a dark scene's dynamic range - a 1.5 clamp is still
+            // 30x the neighborhood in a shadow. The floor is the local expected value.
             {
+                const float localRef = max(floorLuma * rcp(max(diffDiv, 1e-3f)), 0.02f); // demod-domain floor
+                const float hi = localRef * 3.0f;
                 const float sLuma = GetLuminance(demodSpecular);
-                const float sLimit = max(sLuma * 2.0f, 4.0f); // specular can legitimately be bright
-                if (sLuma > sLimit)
-                    demodSpecular *= half(sLimit / sLuma);
+                if (sLuma > hi)
+                    demodSpecular *= half(hi / sLuma);
 
                 const float dLuma = GetLuminance(demodDiffuse);
-                const float dLimit = max(dLuma * 2.0f, 1.5f);
-                if (dLuma > dLimit)
-                    demodDiffuse *= half(dLimit / dLuma);
+                if (dLuma > hi)
+                    demodDiffuse *= half(hi / dLuma);
             }
 
             // Anything that can't survive modulation and clamping should be skipped
