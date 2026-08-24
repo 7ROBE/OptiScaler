@@ -2,6 +2,7 @@
 #include "FSR31Feature_Dx12.h"
 #include "OptiTexts.h"
 #include "shaders/fsrd_preprocess/FSRDPreprocessor_Dx12.h"
+#include <radiancecache/ffx_radiancecache.h>
 #include <DirectXMath.h>
 
 /**
@@ -64,6 +65,17 @@ class FSRDFeatureDx12 : public FSR31FeatureDx12
     ffxCreateContextDescDenoiser _denoiserCtxDesc;
     DenoiserConfiguration _denoiserSettings;
     bool _isMode2;
+
+    // FidelityFX Neural Radiance Cache (NRC / "radiance cache") - optional far-field
+    // irradiance stabilization. Off by default; enable via [FSR-RR] NrcEnabled=true.
+    ffxContext _pNrcCtx = nullptr;
+    
+    
+    bool _nrcReady = false;
+
+    bool InitNrc(ID3D12GraphicsCommandList* cmdList);
+    void DestroyNrc();
+    bool DispatchNrc(ID3D12GraphicsCommandList* InCommandList, bool train);
 
     static bool s_isHWDepth;
     static bool s_isRoughnessPacked;
