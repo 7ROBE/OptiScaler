@@ -574,9 +574,10 @@ void FSRDFeatureDx12::UpdateSize()
 {
     // FSR-RR doesn't currently have proper DRS support. The example implementation 
     // reinits on resolution change as well.
+    // maxRenderSize stores DISPLAY size now - compare against display, not render.
     const bool needsReInit = 
-        _denoiserCtxDesc.maxRenderSize.width != RenderWidth() ||
-        _denoiserCtxDesc.maxRenderSize.height != RenderHeight();
+        _denoiserCtxDesc.maxRenderSize.width != DisplayWidth() ||
+        _denoiserCtxDesc.maxRenderSize.height != DisplayHeight();
 
     if (needsReInit)
     {
