@@ -212,28 +212,43 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
     const float2 prevCoord = float2(px) + mv;
     const bool inBounds = all(prevCoord >= 0.0f) && prevCoord.x < DstTexSize.x - 1 && prevCoord.y < DstTexSize.y - 1;
     
-    // Bilinear reprojected sample - nearest-int sampling shimmers on subpixel motion,
-    // which re-introduces boiling during slow camera movement.
+    // Bilinear reprojected sample with validity rejection - skipped pixels store negative
+    // alpha (invalid); blending raw color from them caused flashing artifacts.
     float4 reprojFloor = floorColor;
     if (inBounds)
     {
         const float2 f = frac(prevCoord);
         const int2 c = int2(floor(prevCoord));
         const int2 cp = min(c + int2(1, 1), int2(DstTexSize.xy) - 1);
-        reprojFloor = lerp(
-            lerp(InPrevFloorColor[c],              InPrevFloorColor[int2(cp.x, c.y)],  f.x),
-            lerp(InPrevFloorColor[int2(c.x, cp.y)], InPrevFloorColor[cp],   f.x),
-            f.y);
+        
+        const float4 s00 = InPrevFloorColor[c];
+        const float4 s10 = InPrevFloorColor[int2(cp.x, c.y)];
+        const float4 s01 = InPrevFloorColor[int2(c.x, cp.y)];
+        const float4 s11 = InPrevFloorColor[cp];
+        
+        // Zero out invalid taps (negative alpha) so they contribute nothing to the blend
+        const float w00 = s00.a >= 0.0h ? (1.0f - f.x) * (1.0f - f.y) : 0.0f;
+        const float w10 = s10.a >= 0.0h ? f.x * (1.0f - f.y) : 0.0f;
+        const float w01 = s01.a >= 0.0h ? (1.0f - f.x) * f.y : 0.0f;
+        const float w11 = s11.a >= 0.0h ? f.x * f.y : 0.0f;
+        const float wSum = w00 + w10 + w01 + w11;
+        
+        if (wSum > 1e-4f)
+        {
+            reprojFloor = (s00 * w00 + s10 * w10 + s01 * w01 + s11 * w11) / wSum;
+            reprojFloor.a = abs(reprojFloor.a); // bilinear of valid alphas is positive
+        }
     }
     
     const float4 prevFloor = reprojFloor;
     const float floorTemporalSim = GetRelativeSimilarity(GetLuminance(floorColor.rgb), GetLuminance(prevFloor.rgb), 0.3f);
     
-    // Velocity-adaptive history weight: slow motion keeps maximum temporal stability,
-    // fast motion damps history to avoid ghost trails.
+    // Velocity-adaptive history weight, quantized to reduce frame-to-frame pumping:
+    // slow motion keeps maximum temporal stability, fast motion damps history to avoid ghost trails.
     const float mvLen = length(mv);
-    const float velocityDamp = saturate(1.0f - mvLen / 12.0f); // 12px+ movement -> no history weight
-    floorColor.rgb = GetSafeFP16(lerp(floorColor.rgb, prevFloor.rgb, floorTemporalSim * lerp(0.5f, 0.85f, velocityDamp)));
+    const float velocityDamp = saturate(1.0f - mvLen / 12.0f);
+    const float velStep = velocityDamp > 0.66f ? 1.0f : (velocityDamp > 0.33f ? 0.6f : 0.3f);
+    floorColor.rgb = GetSafeFP16(lerp(floorColor.rgb, prevFloor.rgb, floorTemporalSim * lerp(0.5f, 0.85f, velStep)));
     
     const float rawLuma = GetLuminance(rawColor);
     const float floorLuma = GetLuminance(floorColor.rgb);
@@ -465,6 +480,8 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
         OutDiffAlbedo[px] = 0.0f;
         OutSignal1[px] = 0.0f;
         OutSignal2[px] = 0.0f;
-        OutSkipSignal[px] = half4(rawColor, rawLuma);
+        // Negative alpha marks this texel as INVALID for temporal floor reuse - the temporal
+        // blend must not sample noisy raw color from skipped pixels (caused flashing).
+        OutSkipSignal[px] = half4(rawColor, -1.0f);
     }
 }
