@@ -250,7 +250,7 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
     const float velocityDamp = saturate(1.0f - mvLen / 12.0f);
     const float velStep = velocityDamp > 0.66f ? 1.0f : (velocityDamp > 0.33f ? 0.6f : 0.3f);
     // Camera cut: history is from a different scene - use current floor only this frame
-    const float temporalWeight = IsSet(FLAGS_CAMERA_CUT) ? 0.0f : floorTemporalSim * lerp(0.5f, 0.85f, velStep);
+    const float temporalWeight = floorTemporalSim * lerp(0.5f, 0.85f, velStep);
     floorColor.rgb = GetSafeFP16(lerp(floorColor.rgb, prevFloor.rgb, temporalWeight));
     
     const float rawLuma = GetLuminance(rawColor);

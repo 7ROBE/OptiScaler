@@ -66,7 +66,6 @@ class FSRDFeatureDx12 : public FSR31FeatureDx12
     bool _isMode2;
 
     static bool s_isHWDepth;
-    static inline bool s_cameraCut = false; // Camera cut detected this frame -> force reset + skip floor history
     static bool s_isRoughnessPacked;
     static inline bool s_rrInputsMissing = false; // Game is not feeding DLSS-RR inputs -> fall back to plain FSR upscaling
 
