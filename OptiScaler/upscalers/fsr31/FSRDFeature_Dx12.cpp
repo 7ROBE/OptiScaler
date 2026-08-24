@@ -1158,11 +1158,18 @@ bool FSRDFeatureDx12::InitNrc()
 {
     const UINT queryCount = RenderWidth() * RenderHeight() / 4; // quarter-res queries
 
+    // NRC needs the DX12 backend (device) chained into the create desc - without it the
+    // DLL has no device and fails with a generic error.
+    ffxCreateBackendDX12Desc nrcBackendDesc = {};
+    nrcBackendDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_DX12;
+    nrcBackendDesc.device = Device;
+
     ffxCreateContextDescRadianceCache nrcDesc = {};
     nrcDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_RADIANCECACHE;
+    nrcDesc.header.pNext = &nrcBackendDesc.header;
     nrcDesc.version = FFX_RADIANCECACHE_VERSION;
     nrcDesc.maxInferenceSampleCount = queryCount;
-    nrcDesc.maxTrainingSampleCount = queryCount;
+    nrcDesc.maxTrainingSampleCount = queryCount * 2;
 
     auto ret = FfxApiProxy::D3D12_CreateContext(&_pNrcCtx, &nrcDesc.header, NULL);
     if (ret != FFX_API_RETURN_OK)
