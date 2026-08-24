@@ -397,6 +397,17 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
                     demodDiffuse *= half(hiD / dLuma);
             }
 
+            // Temporal signal stabilization for low-SNR regions: blend the noisy demodulated
+            // diffuse toward the temporally-stable floor-derived estimate. The floor has been
+            // accumulated across frames (noise-free); where the current signal is mostly noise
+            // (dark areas), leaning on it removes fireflies AND boiling at once.
+            {
+                const float3 stableDiffuse = floorColor.rgb * rcp(max(diffAlbedo.rgb, float3(diffDiv, diffDiv, diffDiv)));
+                const float snr = saturate(floorLuma * 20.0f);   // near-black => low SNR
+                const float smoothW = (1.0f - snr) * 0.6f;       // up to 60% stable blend in shadows
+                demodDiffuse = GetSafeFP16(lerp(demodDiffuse, half3(stableDiffuse), half(smoothW)));
+            }
+
             // Anything that can't survive modulation and clamping should be skipped
             const float3 remodColor = (demodSpecular * specReflectance.rgb) + (demodDiffuse * diffAlbedo.rgb);
             const float3 residual = max(0.0f, denoiserColor - remodColor);           
