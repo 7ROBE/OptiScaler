@@ -1113,7 +1113,7 @@ bool FSRDFeatureDx12::DispatchDenoiser(ID3D12GraphicsCommandList* InCommandList,
         // NRC trainTargets resource - no intermediate copy needed.
         nrcTrainTgtRes = ffxApiGetResourceDX12(FSRDConvShader->GetCompositionOutput(),
                                                FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
-        DispatchNrc(InCommandList, true);
+        DispatchNrc(InCommandList, false); // training disabled: trainTargets must be a BUFFER, texture binding TDRs the device
     }
 
     if (result != FFX_API_RETURN_OK)
