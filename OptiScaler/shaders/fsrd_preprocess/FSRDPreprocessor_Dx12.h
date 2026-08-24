@@ -31,6 +31,7 @@ class FSRDPreprocessor_Dx12
         IsRoughnessPacked =     1 << 2, // Roughness = InNormals.A - NVSDK_NGX_DLSS_Roughness_Mode_Packed (Init param)
         Mode2Signal =           1 << 3, // Enables mode 2 denoiser outputs with discrete diffuse and specular lighting
         RightHanded =           1 << 4, // Camera looks down -Z in view space (RR 1.2.0 signed depth is handedness dependent)
+        CameraCut =             1 << 5, // Camera cut this frame - skip temporal floor history
 
         Debug =                 1 << 16, // Denoiser and upscaler bypassed for debug out if this is set
         DebugModeMask =         0xFF << 16,

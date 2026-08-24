@@ -12,7 +12,8 @@ namespace FSRD
         {
             None = 0,
             LinearDepth = (1 << 0),
-            RightHanded = (1 << 1)
+            RightHanded = (1 << 1),
+            CameraCut = (1 << 2)   // Skip temporal floor history this frame
         };
 
         struct alignas(16) Constants

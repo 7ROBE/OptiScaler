@@ -602,6 +602,10 @@ bool FSRDFeatureDx12::EvaluateInternal(ID3D12GraphicsCommandList* InCommandList,
     if (uint32_t value = 0; inParams.Get(NVSDK_NGX_Parameter_Reset, &value) == NVSDK_NGX_Result_Success)
         _isInReset = value > 0;
 
+    // Camera cut forces a denoiser reset - stale accumulation across cuts flashes
+    if (s_cameraCut)
+        _isInReset = true;
+
     // Denoiser start
     // RR 1.2.0: per-signal descriptors chained via pNext replace the fused input descs
     ffxDispatchDescDenoiserIndirectDiffuse diffuseSignal = {};
@@ -895,6 +899,7 @@ bool FSRDFeatureDx12::PrepareDenoiseConvInput(const NVSDK_NGX_Parameter& inParam
     _prevViewMatrix = _viewMatrix;
     _viewMatrix = {};
 
+
     if (!TryGetNGXMatrix(inParams, NVSDK_NGX_Parameter_DLSS_WORLD_TO_VIEW_MATRIX, _viewMatrix))
     {
         if (StreamlineHooks::isSetConstantsHooked())
@@ -918,6 +923,31 @@ bool FSRDFeatureDx12::PrepareDenoiseConvInput(const NVSDK_NGX_Parameter& inParam
         // Camera rotation and position
         _invViewMatrix = XMMatrixInverse(nullptr, _viewMatrix);
     }
+
+    // Camera-cut detection: cutscenes and gameplay transitions cut abruptly without NGX Reset.
+    // Stale denoiser accumulation + the temporal floor history then flash for a frame or two.
+    // Detect via the view-forward vector: a flip of more than ~60 degrees in one frame is a cut.
+    // (Also catches teleports via large translation jumps.)
+    if (_frameCount > 1)
+    {
+        const XMVECTOR curFwd = XMVector3Normalize(XMVectorSet(
+            _viewMatrix.r[2].m128_f32[0], _viewMatrix.r[2].m128_f32[1], _viewMatrix.r[2].m128_f32[2], 0.0f));
+        const XMVECTOR oldFwd = XMVector3Normalize(XMVectorSet(
+            _prevViewMatrix.r[2].m128_f32[0], _prevViewMatrix.r[2].m128_f32[1], _prevViewMatrix.r[2].m128_f32[2], 0.0f));
+
+        const float dotFwd = XMVectorGetX(XMVector3Dot(curFwd, oldFwd));
+        const float transDelta = std::abs(_viewMatrix.r[3].m128_f32[0] - _prevViewMatrix.r[3].m128_f32[0]) +
+                                 std::abs(_viewMatrix.r[3].m128_f32[1] - _prevViewMatrix.r[3].m128_f32[1]) +
+                                 std::abs(_viewMatrix.r[3].m128_f32[2] - _prevViewMatrix.r[3].m128_f32[2]);
+
+        if ((dotFwd < 0.5f || transDelta > 50.0f) && !s_cameraCut)
+        {
+            s_cameraCut = true;
+            LOG_WARN("Camera cut detected - forcing denoiser reset");
+        }
+    }
+    else
+        s_cameraCut = false;
 
     // Perspective projection matrix (P)
     _prevProjMatrix = _projMatrix; // keep for reflection-space reprojection
@@ -981,6 +1011,10 @@ bool FSRDFeatureDx12::ConvertDenoiserBuffers(ID3D12GraphicsCommandList* InComman
     // RR 1.2.0 expects signed linear depth - sign follows view space facing direction
     if (_isRightHanded)
         _convDesc.Flags |= (uint32_t) FSRDConvFlags::RightHanded;
+
+    // Camera cut: temporal floor history is invalid this frame
+    if (s_cameraCut)
+        _convDesc.Flags |= (uint32_t) FSRDConvFlags::CameraCut;
 
     // Store in column major order for GPU
     XMStoreFloat4x4(&_convDesc.InvViewMatrix, XMMatrixTranspose(_invViewMatrix));
