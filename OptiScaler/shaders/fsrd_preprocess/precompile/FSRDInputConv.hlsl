@@ -380,19 +380,21 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             half3 demodSpecular = GetSafeFP16(specularColor / specDiv);
             half3 demodDiffuse = GetSafeFP16(diffuseColor / diffDiv);
 
-            // Post-demod soft-knee: LOCAL, referenced to the floor estimate at this texel.
-            // A global limit can't span a dark scene's dynamic range - a 1.5 clamp is still
-            // 30x the neighborhood in a shadow. The floor is the local expected value.
+            // Post-demod soft-knee: hybrid reference. Pure floor-referenced clamping crushed
+            // legitimate bright sources in flame-lit scenes (the local signal IS the lighting).
+            // A spike is an outlier relative to its own neighborhood - use the signal's local
+            // brightness as the primary reference, with the floor only as a minimum guard.
             {
-                const float localRef = max(floorLuma * rcp(max(diffDiv, 1e-3f)), 0.02f); // demod-domain floor
-                const float hi = localRef * 3.0f;
+                const float localRef = max(floorLuma * rcp(max(diffDiv, 1e-3f)), 0.02f);
                 const float sLuma = GetLuminance(demodSpecular);
-                if (sLuma > hi)
-                    demodSpecular *= half(hi / sLuma);
+                const float hiS = max(localRef * 3.0f, sLuma * 0.5f); // never clamp below half the local signal
+                if (sLuma > hiS)
+                    demodSpecular *= half(hiS / sLuma);
 
                 const float dLuma = GetLuminance(demodDiffuse);
-                if (dLuma > hi)
-                    demodDiffuse *= half(hi / dLuma);
+                const float hiD = max(max(localRef * 3.0f, dLuma * 0.5f), dLuma - localRef * 8.0f);
+                if (dLuma > hiD)
+                    demodDiffuse *= half(hiD / dLuma);
             }
 
             // Anything that can't survive modulation and clamping should be skipped
