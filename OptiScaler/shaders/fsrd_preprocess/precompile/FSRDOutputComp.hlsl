@@ -286,14 +286,22 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             // visible noise (colored speckle) stays suppressed.
             const half rawLuma = GetLuminance(rawColor.rgb);
             const half denLuma = GetLuminance(denoisedColor.rgb);
-            const half lumaDelta = rawLuma - denLuma;
             
             // Dark-area noise gate: relative luminance deviation explodes in near-black regions
             // where a small absolute delta is a huge relative one. Scale injection down as the
             // base gets darker so shadows keep their denoised cleanliness.
             const float darkGate = saturate(denLuma * 8.0f);
-            const half3 lumaDir = denoisedColor.rgb * rcp(max(denLuma, 1e-3h)); // per-channel direction
             
+            // Noise-spike limiter: raw Monte-Carlo noise produces occasional large luminance
+            // deviations (fireflies), while genuine texture/reflection detail is small-amplitude
+            // and temporally semi-consistent. Soft-clamp the delta so small detail passes at full
+            // strength but large noise spikes are compressed. Threshold scales with the base so
+            // dark areas tolerate less absolute deviation.
+            const float spikeLimit = max(denLuma * 0.5f, 0.02f);
+            half lumaDelta = rawLuma - denLuma;
+            lumaDelta = sign(lumaDelta) * min(abs(lumaDelta), half(spikeLimit));
+            
+            const half3 lumaDir = denoisedColor.rgb * rcp(max(denLuma, 1e-3h)); // per-channel direction
             half3 outColor = GetSafeFP16(lerp(denoisedColor.rgb, rawColor.rgb, rawWeight));
             
             // Full luma-detail transfer at max DetailClamp: at DC >= 2 the output becomes
