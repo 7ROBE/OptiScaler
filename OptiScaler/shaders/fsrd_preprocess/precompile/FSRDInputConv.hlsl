@@ -359,8 +359,11 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             const float3 specularColor = denoiserColor * (specWeight * rcpTotalWeight);
             const float3 diffuseColor = denoiserColor - specularColor;
 
-            half3 demodSpecular = GetSafeFP16(specularColor / specReflectance.rgb);         
-            half3 demodDiffuse = GetSafeFP16(diffuseColor / diffAlbedo.rgb);
+            // Demodulation divisor floor: dividing by tiny albedo (shadows ~0.02) amplifies
+            // residual noise up to 50x - the root cause of dark-threshold collapse and shadow
+            // boiling. Floor the divisor so amplification never exceeds 20x (1/0.05).
+            half3 demodSpecular = GetSafeFP16(specularColor / max(specReflectance.rgb, 0.05f));
+            half3 demodDiffuse = GetSafeFP16(diffuseColor / max(diffAlbedo.rgb, 0.05f));
 
             // Anything that can't survive modulation and clamping should be skipped
             const float3 remodColor = (demodSpecular * specReflectance.rgb) + (demodDiffuse * diffAlbedo.rgb);
