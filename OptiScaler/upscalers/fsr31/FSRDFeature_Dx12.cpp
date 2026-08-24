@@ -1087,8 +1087,10 @@ bool FSRDFeatureDx12::DispatchDenoiser(ID3D12GraphicsCommandList* InCommandList,
     LOG_DEBUG("Dispatch result: {0}", (UINT) result);
 
     // NRC training pass - the denoised radiance from FFX-RR is the ground truth the
-    // cache learns from. Inference happens next frame before the denoiser.
-    if (_nrcReady && result == FFX_API_RETURN_OK)
+    // cache learns from. Train every 4th frame: NN training is expensive and the cache
+    // converges over many frames regardless; per-frame training burns ms for nothing.
+    static uint32_t s_nrcFrameCounter = 0;
+    if (_nrcReady && result == FFX_API_RETURN_OK && (++s_nrcFrameCounter % 4) == 0)
         DispatchNrc(InCommandList, true);
 
     if (result != FFX_API_RETURN_OK)
