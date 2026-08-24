@@ -362,8 +362,26 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             // Demodulation divisor floor: dividing by tiny albedo (shadows ~0.02) amplifies
             // residual noise up to 50x - the root cause of dark-threshold collapse and shadow
             // boiling. Floor the divisor so amplification never exceeds 20x (1/0.05).
-            half3 demodSpecular = GetSafeFP16(specularColor / max(specReflectance.rgb, 0.05f));
-            half3 demodDiffuse = GetSafeFP16(diffuseColor / max(diffAlbedo.rgb, 0.05f));
+            // Hue-preserving: scalar divide by luminance-based floor, not per-channel max.
+            const float specDiv = max(GetLuminance(specReflectance.rgb), 0.05f);
+            const float diffDiv = max(GetLuminance(diffAlbedo.rgb), 0.05f);
+            half3 demodSpecular = GetSafeFP16(specularColor / specDiv);
+            half3 demodDiffuse = GetSafeFP16(diffuseColor / diffDiv);
+
+            // Post-demod soft-knee: clamp in the SAME domain the denoiser receives. Pre-demod
+            // compression was re-inflated by the divide (0.05 spike / 0.05 divisor = 1.0 spike).
+            // Threshold scales with the signal's own brightness + absolute floor.
+            {
+                const float sLuma = GetLuminance(demodSpecular);
+                const float sLimit = max(sLuma * 2.0f, 4.0f); // specular can legitimately be bright
+                if (sLuma > sLimit)
+                    demodSpecular *= half(sLimit / sLuma);
+
+                const float dLuma = GetLuminance(demodDiffuse);
+                const float dLimit = max(dLuma * 2.0f, 1.5f);
+                if (dLuma > dLimit)
+                    demodDiffuse *= half(dLimit / dLuma);
+            }
 
             // Anything that can't survive modulation and clamping should be skipped
             const float3 remodColor = (demodSpecular * specReflectance.rgb) + (demodDiffuse * diffAlbedo.rgb);
