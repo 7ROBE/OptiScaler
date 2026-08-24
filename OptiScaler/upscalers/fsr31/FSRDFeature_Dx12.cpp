@@ -1064,6 +1064,14 @@ bool FSRDFeatureDx12::DispatchDenoiser(ID3D12GraphicsCommandList* InCommandList,
         ApplyConfiguration(FFX_API_CONFIGURE_DENOISER_KEY_GAUSSIAN_KERNEL_RELAXATION);
 
     LOG_DEBUG("Dispatching FSR-RR...");
+    // Temporal-accumulation instrumentation: frameIndex/reset/jitter/renderSize pattern
+    // names a dead-accumulation bug instantly (see boiling investigation).
+    LOG_DEBUG("FSRD state: frameIndex={0} reset={1} jitter=({2:.4f},{3:.4f}) renderSize={4}x{5} motionScale=({6:.3f},{7:.3f})",
+              (uint32_t) dispatchDesc.frameIndex,
+              (uint32_t) ((dispatchDesc.flags & FFX_DENOISER_DISPATCH_RESET) != 0),
+              dispatchDesc.jitterOffsets.x, dispatchDesc.jitterOffsets.y,
+              (uint32_t) dispatchDesc.renderSize.width, (uint32_t) dispatchDesc.renderSize.height,
+              dispatchDesc.motionVectorScale.x, dispatchDesc.motionVectorScale.y);
     const ffxReturnCode_t result = FfxApiProxy::D3D12_Dispatch(&_pDenoiserCtx, &dispatchDesc.header);
     LOG_DEBUG("Dispatch result: {0}", (UINT) result);
 
