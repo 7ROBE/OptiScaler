@@ -3001,6 +3001,45 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
                 if (float v = config->FfxDenoiserDetailClamp.value_or_default();
                     ImGui::SliderFloat("Detail Clamp", &v, 0.1f, 2.0f))
                     config->FfxDenoiserDetailClamp = v;
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip(
+                        "Controls how much raw-frame detail is blended into the denoised result.\n"
+                        "0.5: Pure denoised base - cleanest, softest.\n"
+                        "1.0+: Progressive raw luminance detail injection.\n"
+                        "2.0: Maximum detail - raw blend ungated. May increase noise in shadows.");
+
+                ImGui::SeparatorText("Translation");
+
+                if (bool b = config->FsrRrTransposeMatrices.value_or_default();
+                    ImGui::Checkbox("Transpose Matrices", &b))
+                    config->FsrRrTransposeMatrices = b;
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("RR 1.2.0 debug view indicates NGX matrices need transposing.");
+
+                if (bool b = config->FsrRrUnjitterProjection.value_or_default();
+                    ImGui::Checkbox("Unjitter Projection", &b))
+                    config->FsrRrUnjitterProjection = b;
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip(
+                        "RR 1.2.0 expects the unjittered projection; strips the camera jitter\n"
+                        "from the game's view-to-clip matrix and passes jitter separately.");
+
+                if (bool b = config->FsrRrNrcEnabled.value_or_default();
+                    ImGui::Checkbox("Neural Radiance Cache (experimental)", &b))
+                    config->FsrRrNrcEnabled = b;
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip(
+                        "Enables the FidelityFX Neural Radiance Cache for far-field irradiance\n"
+                        "stabilization. Experimental: requires restart when toggled.\n"
+                        "May reduce shadow boiling at low internal resolutions.");
+
+                // Reset defaults for the translation section
+                if (ImGui::Button("Reset Translation"))
+                {
+                    config->FsrRrTransposeMatrices = true;
+                    config->FsrRrUnjitterProjection = true;
+                    config->FsrRrNrcEnabled = false;
+                }
 
                 ImGui::PopItemWidth();
             }
