@@ -306,7 +306,13 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             
             // Full luma-detail transfer at max DetailClamp: at DC >= 2 the output becomes
             // "denoised chroma + raw luminance" - detail preserved, colored speckle suppressed.
-            const float detailAmount = saturate((DetailClamp - 0.5f) * 0.667f) * lerp(1.0f, darkGate, 0.6f);
+            // Temporal stability gate: raw luma delta is per-frame random (1spp noise), so
+            // injecting it at full strength flickers exactly when the camera moves. SSIM
+            // similarity (rawWeight) is a good proxy for temporal trust - low where the frame
+            // is unstable. When moving, scale injection towards the stable denoised base;
+            // on a static camera full detail is safe.
+            const float motionTrust = lerp(0.35f, 1.0f, saturate(rawWeight));
+            const float detailAmount = saturate((DetailClamp - 0.5f) * 0.667f) * lerp(1.0f, darkGate, 0.6f) * lerp(motionTrust, 1.0f, darkGate);
             const half3 detailInjected = GetSafeFP16(denoisedColor.rgb + lumaDir * lumaDelta * half(max(darkGate, 0.4h)));
             
             [branch]
