@@ -294,12 +294,16 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             
             // Noise-spike limiter: raw Monte-Carlo noise produces occasional large luminance
             // deviations (fireflies), while genuine texture/reflection detail is small-amplitude
-            // and temporally semi-consistent. Soft-clamp the delta so small detail passes at full
-            // strength but large noise spikes are compressed. Threshold scales with the base so
-            // dark areas tolerate less absolute deviation.
+            // and temporally semi-consistent. SOFT compression instead of hard clamp - a hard
+            // cutoff around bright lights produced visible dark rings/halos. Large deltas are
+            // smoothly compressed (knee at denLuma*0.5), small detail passes untouched.
             const float spikeLimit = max(denLuma * 0.5f, 0.02f);
             half lumaDelta = rawLuma - denLuma;
-            lumaDelta = sign(lumaDelta) * min(abs(lumaDelta), half(spikeLimit));
+            {
+                const float a = abs(lumaDelta);
+                if (a > spikeLimit)
+                    lumaDelta = half(sign(lumaDelta) * (spikeLimit + (a - spikeLimit) * 0.25f)); // soft knee, keep 25% above
+            }
             
             const half3 lumaDir = denoisedColor.rgb * rcp(max(denLuma, 1e-3h)); // per-channel direction
             half3 outColor = GetSafeFP16(lerp(denoisedColor.rgb, rawColor.rgb, rawWeight));
