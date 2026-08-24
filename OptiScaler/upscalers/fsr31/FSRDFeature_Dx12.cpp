@@ -1113,7 +1113,7 @@ bool FSRDFeatureDx12::DispatchDenoiser(ID3D12GraphicsCommandList* InCommandList,
             FSRDConvShader->GetLinearDepth(),
             FSRDConvShader->GetOutputNormals(),
             FSRDConvShader->GetOutputDiffAlbedo(),
-            nrcBufA.Get(), Device,
+            nrcBufA.Get(), nrcBufE.Get(), Device,
             RenderWidth() * RenderHeight() / 4);
 
         // Match the SDK sample: buffers UAV -> NON_PIXEL_SHADER_RESOURCE before the NRC

@@ -1,4 +1,18 @@
-// FSRD NRC query generation - fills the NRC prediction/training query buffers.
+import io
+
+p = r"D:/Downloads/fsr rr/OptiScaler/OptiScaler/shaders/fsrd_preprocess/precompile/FSRDNrcQuery.hlsl"
+c = io.open(p, encoding="utf-8").read()
+
+# Per official docs (gpuopen radiance-cache):
+# - position: normalized to scene bounding box [0,1]^3 - we don't have the bbox; use a heuristic:
+#   normalize by a fixed scene scale constant exposed via cbuffer (SceneScale).
+#   v1: divide world pos by a large scale (e.g. 1000) -> approximately [0,1] for typical scenes.
+# - normal/viewDir: POLAR form (r,phi), not octahedral.
+#   r = acos(z) in [0,pi], phi = atan2(y,x) in [-pi,pi]
+# - Counters: buffer of 2 uints [inferenceCount, trainingCount]. The packing shader must write
+#   the actual sample counts so NRC knows buffer occupancy. We fill exactly QueryCount samples.
+
+new_body = """// FSRD NRC query generation - fills the NRC prediction/training query buffers.
 //
 // Encodings per GPUOpen Radiance Cache docs (v0.9.0):
 //   position : float3, normalized to scene bounding box (we approximate with SceneScale)
@@ -32,11 +46,6 @@ cbuffer CB : register(b0)
     float SceneScale;   // world units corresponding to normalized 1.0
 };
 
-float2 SignNotZero(float2 v)
-{
-    return float2(v.x >= 0.0f ? 1.0f : -1.0f, v.y >= 0.0f ? 1.0f : -1.0f);
-}
-
 bool IsSet(uint flag)
 {
     return (Flags & flag) != 0;
@@ -49,6 +58,11 @@ float3 OctToNormalVS(float2 e)
     if (n.z < 0.0f)
         n.xy = (1.0f - abs(n.yx)) * SignNotZero(n.xy);
     return normalize(n);
+}
+
+float2 SignNotZero(float2 v)
+{
+    return float2(v.x >= 0.0f ? 1.0f : -1.0f, v.y >= 0.0f ? 1.0f : -1.0f);
 }
 
 float2 ToPolar(float3 v)
@@ -121,3 +135,7 @@ void CSMain(uint3 dtid : SV_DispatchThreadID)
     OutQueries[base + 9u] = asuint(alb.z);
     OutQueries[base + 10u] = asuint(roughness);
 }
+"""
+
+io.open(p, "w", encoding="utf-8").write(c if False else new_body)
+print("shader rewritten to doc spec")

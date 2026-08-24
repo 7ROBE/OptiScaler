@@ -217,6 +217,7 @@ struct NrcQueryConstants
     UINT QueryCount;
     UINT SrcWidth;
     UINT SrcHeight;
+    float SceneScale;   // world units for normalized position 1.0
 };
 
 // Private implementation
@@ -470,7 +471,8 @@ struct FSRDPreprocessor_Dx12::Impl
 
     bool DispatchNrcQuery(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* depth,
                           ID3D12Resource* normals, ID3D12Resource* diffAlbedo,
-                          ID3D12Resource* queryBuffer, ID3D12Device* dev, UINT queryCount)
+                          ID3D12Resource* queryBuffer, ID3D12Resource* countersBuffer,
+                          ID3D12Device* dev, UINT queryCount)
     {
         if (!cmdList || !queryBuffer || !dev || !m_nrcSrcSize.x)
             return false;
@@ -481,9 +483,10 @@ struct FSRDPreprocessor_Dx12::Impl
         constants.QueryCount = queryCount;
         constants.SrcWidth = (UINT) m_nrcSrcSize.x;
         constants.SrcHeight = (UINT) m_nrcSrcSize.y;
+        constants.SceneScale = 2000.0f; // ~2km scene extent heuristic
 
         ID3D12Resource* inputs[] = { normals, diffAlbedo, depth };
-        ID3D12Resource* outputs[] = { queryBuffer };
+        ID3D12Resource* outputs[] = { queryBuffer, countersBuffer };
 
         const std::span<const byte> cbData((const byte*) &constants, sizeof(constants));
         m_nrcQueryShader.Dispatch(cmdList, cbData, inputs, outputs,
@@ -768,9 +771,10 @@ ID3D12Resource* FSRDPreprocessor_Dx12::GetCompositionOutput() const
 
 bool FSRDPreprocessor_Dx12::DispatchNrcQuery(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* depth,
     ID3D12Resource* normals, ID3D12Resource* diffAlbedo,
-    ID3D12Resource* queryBuffer, ID3D12Device* dev, UINT queryCount)
+    ID3D12Resource* queryBuffer, ID3D12Resource* countersBuffer,
+    ID3D12Device* dev, UINT queryCount)
 {
-    return m_impl->DispatchNrcQuery(cmdList, depth, normals, diffAlbedo, queryBuffer, dev, queryCount);
+    return m_impl->DispatchNrcQuery(cmdList, depth, normals, diffAlbedo, queryBuffer, countersBuffer, dev, queryCount);
 }
 
 bool FSRDPreprocessor_Dx12::Blit(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* srcTex,
