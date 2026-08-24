@@ -6,6 +6,7 @@
 #include "FSRDFeature_Dx12.h"
 #include "shaders/fsrd_preprocess/FSRDPreprocessor_Dx12.h"
 #include "MathUtils.h"
+#include "shaders/fsrd_preprocess/FSRDShaderUtils.h"
 
 static Microsoft::WRL::ComPtr<ID3D12Resource> nrcBufA;
 static Microsoft::WRL::ComPtr<ID3D12Resource> nrcBufB;
@@ -1101,6 +1102,12 @@ bool FSRDFeatureDx12::DispatchDenoiser(ID3D12GraphicsCommandList* InCommandList,
 
     if (nrcTrainThisFrame)
     {
+        // Transition all NRC buffers COMMON -> UAV before any dispatch touches them.
+        ID3D12Resource* nrcAll[] = { nrcBufA.Get(), nrcBufB.Get(), nrcBufC.Get(), nrcBufD.Get(), nrcBufE.Get() };
+        const std::span<const UINT> noMips;
+        FSRD::AddBarriers(InCommandList, std::span<ID3D12Resource* const>(nrcAll), noMips,
+                    D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
         // 1. Fill prediction/training query buffers from the converted signals
         FSRDConvShader->DispatchNrcQuery(InCommandList,
             FSRDConvShader->GetLinearDepth(),
@@ -1114,6 +1121,9 @@ bool FSRDFeatureDx12::DispatchDenoiser(ID3D12GraphicsCommandList* InCommandList,
         nrcTrainTgtRes = ffxApiGetResourceDX12(FSRDConvShader->GetCompositionOutput(),
                                                FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
         DispatchNrc(InCommandList, false); // training disabled: trainTargets must be a BUFFER, texture binding TDRs the device
+
+        FSRD::AddBarriers(InCommandList, std::span<ID3D12Resource* const>(nrcAll), noMips,
+                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
     }
 
     if (result != FFX_API_RETURN_OK)
