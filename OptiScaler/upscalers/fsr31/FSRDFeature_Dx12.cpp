@@ -431,7 +431,10 @@ bool FSRDFeatureDx12::CreateDenoiserContext()
             .pNext = &backendDesc.header
         },
         .version = FFX_DENOISER_VERSION,
-        .maxRenderSize = { RenderWidth(), RenderHeight() },
+        // Match the sample: maxRenderSize uses the UPSCALED size, not render size.
+        // The DLL sizes its internal position tiles from this - using render size made
+        // the internal buffers half-res => blocky VCP/VHP debug views.
+        .maxRenderSize = { DisplayWidth(), DisplayHeight() },
         .signalFlags = static_cast<uint32_t>(_isMode2 ? (FFX_DENOISER_SIGNAL_INDIRECT_DIFFUSE | FFX_DENOISER_SIGNAL_INDIRECT_SPECULAR)
                                 : FFX_DENOISER_SIGNAL_INDIRECT_DIFFUSE),
         // Full-res DLSS-RR inputs - no checkerboard reconstruction on the translation path
