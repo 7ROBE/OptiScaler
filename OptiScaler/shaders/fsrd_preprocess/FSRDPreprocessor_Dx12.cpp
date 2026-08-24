@@ -417,7 +417,9 @@ struct FSRDPreprocessor_Dx12::Impl
             .NearPlane = desc.NearPlane,
             .FarPlane = desc.FarPlane,
             .FloorIsolation = desc.FloorIsolation,
-            .Flags = desc.Flags
+            .Flags = desc.Flags,
+            .ProjMatrix = desc.ProjMatrix,
+            .PrevProjMatrix = desc.PrevProjMatrix
         };
 
         in.Resources.InBlurColor = m_smoothFloor;

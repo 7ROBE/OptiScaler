@@ -920,6 +920,7 @@ bool FSRDFeatureDx12::PrepareDenoiseConvInput(const NVSDK_NGX_Parameter& inParam
     }
 
     // Perspective projection matrix (P)
+    _prevProjMatrix = _projMatrix; // keep for reflection-space reprojection
     _projMatrix = {};
 
     if (!TryGetNGXMatrix(inParams, NVSDK_NGX_Parameter_DLSS_VIEW_TO_CLIP_MATRIX, _projMatrix))
@@ -990,6 +991,10 @@ bool FSRDFeatureDx12::ConvertDenoiserBuffers(ID3D12GraphicsCommandList* InComman
 
     // Previous world to view for linear depth delta
     XMStoreFloat4x4(&_convDesc.PrevViewMatrix, XMMatrixTranspose(_prevViewMatrix));
+
+    // View to clip (current + previous) for reflection-space reprojection
+    XMStoreFloat4x4(&_convDesc.ProjMatrix, XMMatrixTranspose(_projMatrix));
+    XMStoreFloat4x4(&_convDesc.PrevProjMatrix, XMMatrixTranspose(_prevProjMatrix));
 
     // Near and far planes
     const ViewPlanes planes = GetViewPlanes(_projMatrix, DepthInverted());

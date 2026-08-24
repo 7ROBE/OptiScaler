@@ -110,6 +110,8 @@ class FSRDPreprocessor_Dx12
         DirectX::XMFLOAT4X4 InvViewMatrix;     // DLSSD WorldToView^1 - Camera matrix
         DirectX::XMFLOAT4X4 InvProjMatrix;     // DLSSD ViewToClip^-1 - Projection
         DirectX::XMFLOAT4X4 PrevViewMatrix;    // DLSSD WorldToView from last frame
+        DirectX::XMFLOAT4X4 ProjMatrix;        // DLSSD ViewToClip (current)
+        DirectX::XMFLOAT4X4 PrevProjMatrix;    // DLSSD ViewToClip from last frame
 
         DirectX::XMFLOAT4 RenderSize;    // XY: Resolution of inputs - ZW: 1.0 / Resolution
 

@@ -99,6 +99,9 @@ cbuffer CB_Packing : register(b0)
     
     float FloorIsolation;
     uint Flags;
+    
+    float4x4 ProjMatrix;     // ViewToClip (current)
+    float4x4 PrevProjMatrix; // ViewToClip (previous) - for reflection-space reprojection
 };
 
 bool IsSet(uint mask) { return (Flags & mask) == mask; }
@@ -157,12 +160,55 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
     const float3 rawColor = GetSafeFP16(InColor[px].rgb);
     float4 floorColor = InFloorColor[px];  
 
+    // Motion vectors (pixel movement, current -> previous) + early reflection-space motion
+    const float2 motionIn = InMotionVectors[px].rg;
+    
+    // Reflection-space motion: on smooth surfaces the reflected content moves with the virtual
+    // hit point (P' = X + t*R), not the surface. Reconstruct it so the floor history reprojects
+    // correctly inside reflections during camera pans. Mode 2 only (needs specular hit distance).
+    float2 virtualMotion = 0.0f;
+    float reflectionWeight = 0.0f;
+    [branch]
+    if (IsSet(FLAGS_MODE_2_SIGNAL) && !IsSet(FLAGS_DEBUG))
+    {
+        const float4 earlyNormal = InNormals[px];
+        const float earlyRough = IsSet(FLAGS_PACKED_ROUGHNESS) ? earlyNormal.a : InRoughness[px];
+        const float smoothness = saturate(1.0f - earlyRough * 5.0f);
+        const float hitT = InSpecHitDist[px];
+        
+        [branch]
+        if (hitT > 1e-3f && hitT < 1e4f && smoothness > 0.05f)
+        {
+            const float3 earlyViewPos = GetViewSpacePos(px);
+            const float3 viewNormal = normalize(mul(earlyNormal.rgb, (float3x3) InvViewMatrix));
+            const float3 reflDir = reflect(normalize(earlyViewPos), viewNormal);
+            
+            const float3 hitViewPos = earlyViewPos + reflDir * hitT;
+            const float3 hitWorldPos = mul(InvViewMatrix, float4(hitViewPos, 1.0f)).xyz;
+            const float3 hitPrevViewPos = mul(PrevViewMatrix, float4(hitWorldPos, 1.0f)).xyz;
+            
+            const float4 hitClipCur = mul(ProjMatrix, float4(hitViewPos, 1.0f));
+            const float4 hitClipPrev = mul(PrevProjMatrix, float4(hitPrevViewPos, 1.0f));
+            
+            [branch]
+            if (hitClipCur.w > 1e-4f && hitClipPrev.w > 1e-4f)
+            {
+                const float2 uvCur = NDCToUV(hitClipCur.xy / hitClipCur.w);
+                const float2 uvPrev = NDCToUV(hitClipPrev.xy / hitClipPrev.w);
+                virtualMotion = (uvPrev - uvCur) * DstTexSize.xy; // pixels
+                reflectionWeight = smoothness;
+            }
+        }
+    }
+    
+    // Reprojection vector for the floor history: surface motion on rough surfaces,
+    // blended towards the virtual reflection motion on smooth ones.
+    const float2 mv = lerp(motionIn, virtualMotion, reflectionWeight);
+
     // Temporal floor stabilization: the spatial median still carries per-frame noise.
-    // Sample the previous floor at the REPROJECTED position (motion vectors point from the
-    // current pixel to where this surface was last frame) - without reprojection the blend
+    // Sample the previous floor at the REPROJECTED position - without reprojection the blend
     // compares unrelated pixels while moving and the gate collapses, bringing back boiling
     // exactly during motion. Off-screen or invalid samples fall back to the current floor.
-    const float2 mv = InMotionVectors[px].rg; // pixel movement, current -> previous
     const float2 prevCoord = float2(px) + mv;
     const bool inBounds = all(prevCoord >= 0.0f) && prevCoord.x < DstTexSize.x - 1 && prevCoord.y < DstTexSize.y - 1;
     
@@ -178,7 +224,6 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             lerp(InPrevFloorColor[c],              InPrevFloorColor[int2(cp.x, c.y)],  f.x),
             lerp(InPrevFloorColor[int2(c.x, cp.y)], InPrevFloorColor[cp],   f.x),
             f.y);
-        // note: second lerp row uses (c.x, cp.y) and (cp.x, cp.y)
     }
     
     const float4 prevFloor = reprojFloor;
@@ -219,7 +264,26 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
         // for both configurations. Cyberpunk happens to use world normals, thankfully.
         float4 worldSurfaceNormal = InNormals[px];        
         const float2 octNormal = OctahedralEncode(worldSurfaceNormal.rgb);
-        const float materialType = 0.0f;
+        
+        // Synthetic material IDs (FSR-RR normals.A, 0-3 normalized). RR rejects temporal mixing
+        // between mismatched IDs - spending the three custom slots on the boundaries that cause
+        // the worst cross-material ghosting:
+        //   0 = default (dielectrics, rough surfaces)
+        //   1 = metal / mirror-like - high or strongly-tinted F0. Dielectric F0 ~= 0.04 flat grey;
+        //       metals are brighter and colored. Quantized with a wide dead-zone band so textured
+        //       albedo doesn't fragment the ID per-texel (IDs must stay low-frequency and stable).
+        //   2 = emissive - reuses the existing emissive detection; neon-on-dark is the worst case.
+        // SSS/skin would need an engine guide buffer DLSS doesn't tag - left as default.
+        float materialType = 0.0f;
+        if (isEmissive > 0.5f)
+            materialType = 2.0f / 3.0f;
+        else
+        {
+            // Coarse metal classification: peak F0 with a soft band between 0.15 and 0.35 -
+            // well above dielectric 0.04, tolerant of BRDF view-dependence.
+            const float f0Peak = max(specReflectance.r, max(specReflectance.g, specReflectance.b));
+            materialType = smoothstep(0.15f, 0.35f, f0Peak) * (1.0f / 3.0f);
+        }
     
         // DLSS-RR provides 3D normals
         // Linear roughness optionally included in the A channel, or in a separate single-channel 
@@ -237,10 +301,9 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
         float3 prevViewSpacePos = mul(PrevViewMatrix, float4(worldSpacePos, 1.0f)).xyz;
             
         // FSR-RR requires Linear Depth Delta in Blue channel
-        const float2 motionIn = InMotionVectors[px].rg; // RG: Pixel Movement
         const float depthDelta = (prevViewSpacePos.z - viewSpacePos.z);
-        const float3 motionOut = float3(motionIn, depthDelta);
-        OutMotion[px] = half4(motionOut, 0.0f);
+        const float3 motionOut3 = float3(motionIn, depthDelta);
+        OutMotion[px] = half4(motionOut3, 0.0f);
 
         half hitDist = hitDist = 0.0f;
         half3 demodColor = 0.0f;
@@ -356,11 +419,11 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
                     break;
                 
                 case FLAGS_DEBUG_OUT_MOTION:
-                    debugColor = VisualizeMotionVec(motionOut.xy * DstTexSize.xy, 0.1f);
+                    debugColor = VisualizeMotionVec(motionIn * DstTexSize.xy, 0.1f);
                     break;
 
                 case FLAGS_DEBUG_OUT_DEPTH_DELTA:
-                    debugColor = VisualizeSignedDiff(motionOut.z, 5.0f);
+                    debugColor = VisualizeSignedDiff(depthDelta, 5.0f);
                     break;
                 
                 case FLAGS_DEBUG_OUT_NORMALS:

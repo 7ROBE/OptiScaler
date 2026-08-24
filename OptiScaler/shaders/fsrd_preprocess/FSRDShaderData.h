@@ -153,6 +153,9 @@ namespace FSRD
 
             float FloorIsolation;
             uint32_t Flags;  // Dynamic configuration flags. See: ConfigFlags
+
+            XMFLOAT4X4 ProjMatrix;     // ViewToClip (current)
+            XMFLOAT4X4 PrevProjMatrix; // ViewToClip (previous) - reflection-space reprojection
         };
 
         union Input

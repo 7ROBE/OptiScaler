@@ -77,6 +77,7 @@ class FSRDFeatureDx12 : public FSR31FeatureDx12
     DirectX::XMMATRIX _viewMatrix;      // World to camera space
     DirectX::XMMATRIX _prevViewMatrix;  // Last world to camera space
     DirectX::XMMATRIX _projMatrix;      // Perspective projection matrix
+    DirectX::XMMATRIX _prevProjMatrix;  // Last frame's projection (reflection-space reprojection)
     bool _isRightHanded;                // True if the camera matrix is right handed
 
     std::unique_ptr<FSRDPreprocessor_Dx12> FSRDConvShader;
