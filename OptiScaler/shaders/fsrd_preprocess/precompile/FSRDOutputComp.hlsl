@@ -302,6 +302,11 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             lumaDelta = sign(lumaDelta) * min(abs(lumaDelta), half(spikeLimit));
             
             const half3 lumaDir = denoisedColor.rgb * rcp(max(denLuma, 1e-3h)); // per-channel direction
+            
+            // Raw-blend gate: rawWeight (SSIM) fluctuates frame-to-frame at 1spp, re-injecting
+            // noise even with DetailClamp = 0. Scale the raw contribution by DetailClamp so the
+            // denoised base is pure below 0.5 and raw detail returns progressively above it.
+            rawWeight *= saturate((DetailClamp - 0.5f) * 2.0f);
             half3 outColor = GetSafeFP16(lerp(denoisedColor.rgb, rawColor.rgb, rawWeight));
             
             // Full luma-detail transfer at max DetailClamp: at DC >= 2 the output becomes
