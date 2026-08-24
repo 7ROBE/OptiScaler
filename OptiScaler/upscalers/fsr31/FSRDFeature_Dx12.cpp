@@ -7,6 +7,13 @@
 #include "shaders/fsrd_preprocess/FSRDPreprocessor_Dx12.h"
 #include "MathUtils.h"
 
+static Microsoft::WRL::ComPtr<ID3D12Resource> nrcBufA;
+static Microsoft::WRL::ComPtr<ID3D12Resource> nrcBufB;
+static Microsoft::WRL::ComPtr<ID3D12Resource> nrcBufC;
+static Microsoft::WRL::ComPtr<ID3D12Resource> nrcBufD;
+static Microsoft::WRL::ComPtr<ID3D12Resource> nrcBufE;
+static FfxApiResource nrcPredInRes, nrcPredOutRes, nrcTrainInRes, nrcTrainTgtRes, nrcCountersRes;
+
 using namespace DirectX;
 using namespace OptiMath;
 
@@ -1090,8 +1097,24 @@ bool FSRDFeatureDx12::DispatchDenoiser(ID3D12GraphicsCommandList* InCommandList,
     // cache learns from. Train every 4th frame: NN training is expensive and the cache
     // converges over many frames regardless; per-frame training burns ms for nothing.
     static uint32_t s_nrcFrameCounter = 0;
-    if (_nrcReady && result == FFX_API_RETURN_OK && (++s_nrcFrameCounter % 4) == 0)
+    const bool nrcTrainThisFrame = _nrcReady && result == FFX_API_RETURN_OK && (++s_nrcFrameCounter % 4) == 0;
+
+    if (nrcTrainThisFrame)
+    {
+        // 1. Fill prediction/training query buffers from the converted signals
+        FSRDConvShader->DispatchNrcQuery(InCommandList,
+            FSRDConvShader->GetLinearDepth(),
+            FSRDConvShader->GetOutputNormals(),
+            FSRDConvShader->GetOutputDiffAlbedo(),
+            nrcBufA.Get(), Device,
+            RenderWidth() * RenderHeight() / 4);
+
+        // Training targets: the denoised composition output (texture) bound directly as the
+        // NRC trainTargets resource - no intermediate copy needed.
+        nrcTrainTgtRes = ffxApiGetResourceDX12(FSRDConvShader->GetCompositionOutput(),
+                                               FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
         DispatchNrc(InCommandList, true);
+    }
 
     if (result != FFX_API_RETURN_OK)
     {
@@ -1124,12 +1147,6 @@ struct NrcQuery
     float roughness;
 };
 
-static Microsoft::WRL::ComPtr<ID3D12Resource> nrcBufA;
-static Microsoft::WRL::ComPtr<ID3D12Resource> nrcBufB;
-static Microsoft::WRL::ComPtr<ID3D12Resource> nrcBufC;
-static Microsoft::WRL::ComPtr<ID3D12Resource> nrcBufD;
-static Microsoft::WRL::ComPtr<ID3D12Resource> nrcBufE;
-static FfxApiResource nrcPredInRes, nrcPredOutRes, nrcTrainInRes, nrcTrainTgtRes, nrcCountersRes;
 static Microsoft::WRL::ComPtr<ID3D12Resource> CreateNrcBuffer(ID3D12Device* dev, UINT64 byteSize, const wchar_t* name)
 {
     D3D12_RESOURCE_DESC desc = {};

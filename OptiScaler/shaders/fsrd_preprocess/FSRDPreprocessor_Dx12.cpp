@@ -491,6 +491,7 @@ struct FSRDPreprocessor_Dx12::Impl
         return true;
     }
 
+
     void DispatchConversion(ID3D12GraphicsCommandList* cmdList, const ConversionDesc& desc) 
     {
         if (!cmdList || !m_maxWidth)
@@ -763,6 +764,13 @@ bool FSRDPreprocessor_Dx12::DispatchComposition(ID3D12GraphicsCommandList* cmdLi
 ID3D12Resource* FSRDPreprocessor_Dx12::GetCompositionOutput() const 
 { 
     return m_impl->m_CompositionOutput.Get(); 
+}
+
+bool FSRDPreprocessor_Dx12::DispatchNrcQuery(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* depth,
+    ID3D12Resource* normals, ID3D12Resource* diffAlbedo,
+    ID3D12Resource* queryBuffer, ID3D12Device* dev, UINT queryCount)
+{
+    return m_impl->DispatchNrcQuery(cmdList, depth, normals, diffAlbedo, queryBuffer, dev, queryCount);
 }
 
 bool FSRDPreprocessor_Dx12::Blit(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* srcTex,
