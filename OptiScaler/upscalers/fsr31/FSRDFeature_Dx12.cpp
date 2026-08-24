@@ -488,7 +488,7 @@ bool FSRDFeatureDx12::CreateDenoiserContext()
         if (const auto v = cfg.FsrRrDebugViewLinearDepthMax; v.has_value())
             dbgMax = v.value();
         else
-            dbgMax = 1000.0f; // covers most game depth ranges; override via INI if needed
+            dbgMax = 30.0f; // typical gameplay view distance; keeps indoor scenes visible
         const FfxApiFloatBounds dbgBounds = { dbgMin, dbgMax };
 
         ffxQueryDescDenoiserGetDefaultKeyValue boundsCfg = 
