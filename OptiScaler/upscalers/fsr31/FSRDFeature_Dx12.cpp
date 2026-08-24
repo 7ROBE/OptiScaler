@@ -1244,5 +1244,6 @@ ffxReturnCode_t FSRDFeatureDx12::ApplyConfiguration(FfxApiConfigureDenoiserKey k
     };
 
     const ffxReturnCode_t code = FfxApiProxy::D3D12_Configure(&_pDenoiserCtx, &configureDesc.header);
+    LOG_INFO("FSRD Configure key=0x{0:X} value={1:.3f} result={2}", (uint64_t)key, _denoiserSettings.GetMember(key), (UINT)code);
     return code;
 }
