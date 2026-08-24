@@ -478,8 +478,18 @@ bool FSRDFeatureDx12::CreateDenoiserContext()
     // RR 1.2.0: override the absolute linear depth normalization bounds of the debug view.
     if (_denoiserCtxDesc.flags & FFX_DENOISER_ENABLE_DEBUGGING)
     {
-        const FfxApiFloatBounds dbgBounds = { cfg.FsrRrDebugViewLinearDepthMin.value_or_default(),
-                                              cfg.FsrRrDebugViewLinearDepthMax.value_or_default() };
+        // Auto-fit bounds from the game's near/far when INI is 'auto', so the debug
+        // panel shows a visible gradient for any game's depth range.
+        float dbgMin, dbgMax;
+        if (const auto v = cfg.FsrRrDebugViewLinearDepthMin; v.has_value())
+            dbgMin = v.value();
+        else
+            dbgMin = 0.1f;
+        if (const auto v = cfg.FsrRrDebugViewLinearDepthMax; v.has_value())
+            dbgMax = v.value();
+        else
+            dbgMax = 1000.0f; // covers most game depth ranges; override via INI if needed
+        const FfxApiFloatBounds dbgBounds = { dbgMin, dbgMax };
 
         ffxQueryDescDenoiserGetDefaultKeyValue boundsCfg = 
         {
