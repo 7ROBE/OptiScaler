@@ -172,6 +172,17 @@ class FSRDPreprocessor_Dx12
      */
     bool DispatchConversion(ID3D12GraphicsCommandList* cmdList, const ConversionDesc& desc);
 
+    /// NRC query-generation pass. Fills queryBuffer with packed queries from converted signals.
+    bool DispatchNrcQuery(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* depth,
+                          ID3D12Resource* normals, ID3D12Resource* diffAlbedo,
+                          ID3D12Resource* queryBuffer, ID3D12Device* dev, UINT queryCount);
+
+    /// Dispatches the NRC query-generation pass. Fills the caller-owned query buffer with
+    /// packed NRC queries from the converted signal textures.
+    bool DispatchNrcQuery(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* depth,
+                          ID3D12Resource* normals, ID3D12Resource* diffAlbedo,
+                          ID3D12Resource* queryBuffer, UINT queryCount);
+
     /**
      * @brief Configures input/output resources after input conversion for FSR-RR with Mode-1 fused inputs.
      * Fills the indirect diffuse signal descriptor and links it into the dispatch chain (RR 1.2.0 signal API).
