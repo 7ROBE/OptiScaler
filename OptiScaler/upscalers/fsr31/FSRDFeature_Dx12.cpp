@@ -1102,34 +1102,37 @@ bool FSRDFeatureDx12::DispatchDenoiser(ID3D12GraphicsCommandList* InCommandList,
 
     if (nrcTrainThisFrame)
     {
-        // Transition all NRC buffers COMMON -> UAV before any dispatch touches them.
+        // Transition all NRC buffers COMMON -> UAV before our query shader writes them.
         ID3D12Resource* nrcAll[] = { nrcBufA.Get(), nrcBufB.Get(), nrcBufC.Get(), nrcBufD.Get(), nrcBufE.Get() };
         const std::span<const UINT> noMips;
         FSRD::AddBarriers(InCommandList, std::span<ID3D12Resource* const>(nrcAll), noMips,
                     D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-        LOG_WARN("NRC step 1: barriers done");
-        
-        // 1. Fill prediction/training query buffers from the converted signals
-        LOG_WARN("NRC step 2: dispatching query shader");
+        // Fill prediction/training query buffers from the converted signals
         FSRDConvShader->DispatchNrcQuery(InCommandList,
             FSRDConvShader->GetLinearDepth(),
             FSRDConvShader->GetOutputNormals(),
             FSRDConvShader->GetOutputDiffAlbedo(),
             nrcBufA.Get(), Device,
             RenderWidth() * RenderHeight() / 4);
-        LOG_WARN("NRC step 3: query shader dispatched");
 
-        // Training targets: the denoised composition output (texture) bound directly as the
-        // NRC trainTargets resource - no intermediate copy needed.
-        nrcTrainTgtRes = ffxApiGetResourceDX12(FSRDConvShader->GetCompositionOutput(),
-                                               FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
-        LOG_WARN("NRC step 4: calling NRC dispatch (inference)");
-        DispatchNrc(InCommandList, false);
-        LOG_WARN("NRC step 5: NRC dispatch returned");
+        // Match the SDK sample: buffers UAV -> NON_PIXEL_SHADER_RESOURCE before the NRC
+        // dispatch (the DLL reads them as shader resources).
+        ID3D12Resource* nrcReads[] = { nrcBufA.Get(), nrcBufB.Get(), nrcBufC.Get(), nrcBufD.Get(), nrcBufE.Get() };
+        FSRD::AddBarriers(InCommandList, std::span<ID3D12Resource* const>(nrcReads), noMips,
+                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-        FSRD::AddBarriers(InCommandList, std::span<ID3D12Resource* const>(nrcAll), noMips,
-                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+        nrcPredInRes = ffxApiGetResourceDX12(nrcBufA.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ);
+        nrcPredOutRes = ffxApiGetResourceDX12(nrcBufB.Get(), FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
+        nrcTrainInRes = ffxApiGetResourceDX12(nrcBufC.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ);
+        nrcTrainTgtRes = ffxApiGetResourceDX12(nrcBufD.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ);
+        nrcCountersRes = ffxApiGetResourceDX12(nrcBufE.Get(), FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
+
+        DispatchNrc(InCommandList, true);
+
+        // Back to COMMON after NRC is done with them.
+        FSRD::AddBarriers(InCommandList, std::span<ID3D12Resource* const>(nrcReads), noMips,
+                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COMMON);
     }
 
     if (result != FFX_API_RETURN_OK)
@@ -1256,16 +1259,14 @@ bool FSRDFeatureDx12::DispatchNrc(ID3D12GraphicsCommandList* InCommandList, bool
     nrcDispatch.predictionInputs = nrcPredInRes;
     nrcDispatch.predictionOutputs = nrcPredOutRes;
     nrcDispatch.sampleCounters = nrcCountersRes;
-    nrcDispatch.flags = FFX_RADIANCE_CACHE_DISPATCH_INFERENCE;
-
-    // Training resources only when actually training. Binding the composition TEXTURE as
-    // trainTargets (a BUFFER slot) faults the device even on inference-only dispatches.
-    if (train)
-    {
-        nrcDispatch.trainInputs = nrcTrainInRes;
-        nrcDispatch.trainTargets = nrcTrainTgtRes;
-        nrcDispatch.flags |= FFX_RADIANCE_CACHE_DISPATCH_TRAINING;
-    }
+    // Sample-matching: clear counters every dispatch, overrides with their flags.
+    nrcDispatch.flags = FFX_RADIANCE_CACHE_DISPATCH_INFERENCE |
+                        (train ? FFX_RADIANCE_CACHE_DISPATCH_TRAINING : 0u) |
+                        FFX_RADIANCE_CACHE_CLEAR_ALL_COUNTERS |
+                        FFX_RADIANCE_CACHE_OVERRIDE_LEARNING_RATE |
+                        FFX_RADIANCE_CACHE_OVERRIDE_WEIGHT_SMOOTHING;
+    nrcDispatch.overrides.learningRate = 1.0f;
+    nrcDispatch.overrides.weightSmoothing = 0.95f;
 
     const ffxReturnCode_t result = FfxApiProxy::D3D12_Dispatch(&_pNrcCtx, &nrcDispatch.header);
     if (result != FFX_API_RETURN_OK)
