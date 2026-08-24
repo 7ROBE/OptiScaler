@@ -1255,11 +1255,17 @@ bool FSRDFeatureDx12::DispatchNrc(ID3D12GraphicsCommandList* InCommandList, bool
     nrcDispatch.commandList = InCommandList;
     nrcDispatch.predictionInputs = nrcPredInRes;
     nrcDispatch.predictionOutputs = nrcPredOutRes;
-    nrcDispatch.trainInputs = nrcTrainInRes;
-    nrcDispatch.trainTargets = nrcTrainTgtRes;
     nrcDispatch.sampleCounters = nrcCountersRes;
-    nrcDispatch.flags = FFX_RADIANCE_CACHE_DISPATCH_INFERENCE |
-                        (train ? FFX_RADIANCE_CACHE_DISPATCH_TRAINING : 0);
+    nrcDispatch.flags = FFX_RADIANCE_CACHE_DISPATCH_INFERENCE;
+
+    // Training resources only when actually training. Binding the composition TEXTURE as
+    // trainTargets (a BUFFER slot) faults the device even on inference-only dispatches.
+    if (train)
+    {
+        nrcDispatch.trainInputs = nrcTrainInRes;
+        nrcDispatch.trainTargets = nrcTrainTgtRes;
+        nrcDispatch.flags |= FFX_RADIANCE_CACHE_DISPATCH_TRAINING;
+    }
 
     const ffxReturnCode_t result = FfxApiProxy::D3D12_Dispatch(&_pNrcCtx, &nrcDispatch.header);
     if (result != FFX_API_RETURN_OK)
