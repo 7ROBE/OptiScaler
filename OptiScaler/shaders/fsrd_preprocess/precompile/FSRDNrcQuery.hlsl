@@ -8,6 +8,12 @@
 
 #define FLAGS_PACKED_ROUGHNESS (1 << 2)
 
+#define NrcRS \
+    "RootFlags(0), " \
+    "CBV(b0), " \
+    "DescriptorTable(SRV(t0, numDescriptors = 3), visibility = SHADER_VISIBILITY_ALL), " \
+    "DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL)"
+
 Texture2D<float4> InNormals : register(t0);   // RG=octa normal, B=roughness, A=material
 Texture2D<float4> InAlbedo : register(t1);    // linear diffuse albedo
 Texture2D<float> InDepth : register(t2);      // HW depth
@@ -45,6 +51,7 @@ float3 OctToNormalWS(float2 e)
     return normalize(n);
 }
 
+[RootSignature(NrcRS)]
 [numthreads(8, 8, 1)]
 void CSMain(uint3 dtid : SV_DispatchThreadID)
 {
