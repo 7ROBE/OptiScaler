@@ -317,6 +317,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             FsrRrDebugViewLinearDepthMin.set_from_config(readFloat("FSR-RR", "DebugViewLinearDepthMin"));
             FsrRrDebugViewLinearDepthMax.set_from_config(readFloat("FSR-RR", "DebugViewLinearDepthMax"));
             FsrRrTransposeMatrices.set_from_config(readBool("FSR-RR", "TransposeMatrices"));
+            FsrRrNrcEnabled.set_from_config(readBool("FSR-RR", "NrcEnabled"));
             FsrRrUnjitterProjection.set_from_config(readBool("FSR-RR", "UnjitterProjection"));
             FfxDenoiserDetailClamp.set_from_config(readFloat("FSR-RR", "DetailClamp"));
         }
@@ -1175,6 +1176,8 @@ bool Config::SaveIni()
                      GetFloatValue(Instance()->FsrRrDebugViewLinearDepthMax.value_for_config()).c_str());
         ini.SetValue("FSR-RR", "TransposeMatrices",
                      GetBoolValue(Instance()->FsrRrTransposeMatrices.value_for_config()).c_str());
+        ini.SetValue("FSR-RR", "NrcEnabled",
+                     GetBoolValue(Instance()->FsrRrNrcEnabled.value_for_config()).c_str());
         ini.SetValue("FSR-RR", "UnjitterProjection",
                      GetBoolValue(Instance()->FsrRrUnjitterProjection.value_for_config()).c_str());
         ini.SetValue("FSR-RR", "DetailClamp",

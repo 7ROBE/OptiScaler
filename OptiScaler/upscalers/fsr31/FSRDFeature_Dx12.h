@@ -73,7 +73,7 @@ class FSRDFeatureDx12 : public FSR31FeatureDx12
     
     bool _nrcReady = false;
 
-    bool InitNrc(ID3D12GraphicsCommandList* cmdList);
+    bool InitNrc();
     void DestroyNrc();
     bool DispatchNrc(ID3D12GraphicsCommandList* InCommandList, bool train);
 

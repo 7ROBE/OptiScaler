@@ -462,6 +462,10 @@ bool FSRDFeatureDx12::CreateDenoiserContext()
     // Query default settings
     SetDefaultConfiguration();
 
+    // Optional Neural Radiance Cache for far-field irradiance stabilization
+    if (Config::Instance()->FsrRrNrcEnabled.value_or_default())
+        InitNrc();
+
 #ifdef _DEBUG
     // RR 1.2.0: override the absolute linear depth normalization bounds of the debug view.
     if (_denoiserCtxDesc.flags & FFX_DENOISER_ENABLE_DEBUGGING)
@@ -540,6 +544,7 @@ bool FSRDFeatureDx12::QueryDenoiserVersions()
 
 void FSRDFeatureDx12::DestroyDenoiserContext() 
 {
+    DestroyNrc();
     if (_pDenoiserCtx != nullptr)
         FfxApiProxy::D3D12_DestroyContext(&_pDenoiserCtx, nullptr);
 }
@@ -1081,6 +1086,11 @@ bool FSRDFeatureDx12::DispatchDenoiser(ID3D12GraphicsCommandList* InCommandList,
     const ffxReturnCode_t result = FfxApiProxy::D3D12_Dispatch(&_pDenoiserCtx, &dispatchDesc.header);
     LOG_DEBUG("Dispatch result: {0}", (UINT) result);
 
+    // NRC training pass - the denoised radiance from FFX-RR is the ground truth the
+    // cache learns from. Inference happens next frame before the denoiser.
+    if (_nrcReady && result == FFX_API_RETURN_OK)
+        DispatchNrc(InCommandList, true);
+
     if (result != FFX_API_RETURN_OK)
     {
         LOG_ERROR("Dispatch error: {0}", FfxApiProxy::ReturnCodeToString(result));
@@ -1144,7 +1154,7 @@ static Microsoft::WRL::ComPtr<ID3D12Resource> CreateNrcBuffer(ID3D12Device* dev,
     return res;
 }
 
-bool FSRDFeatureDx12::InitNrc(ID3D12GraphicsCommandList* cmdList)
+bool FSRDFeatureDx12::InitNrc()
 {
     const UINT queryCount = RenderWidth() * RenderHeight() / 4; // quarter-res queries
 
