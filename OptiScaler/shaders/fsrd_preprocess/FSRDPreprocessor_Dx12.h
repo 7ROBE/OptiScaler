@@ -173,6 +173,11 @@ class FSRDPreprocessor_Dx12
     bool DispatchConversion(ID3D12GraphicsCommandList* cmdList, const ConversionDesc& desc);
 
     /// NRC query-generation pass. Fills queryBuffer with packed queries from converted signals.
+    /// Resource accessors for the NRC query pass (caller-owned dispatch)
+    ID3D12Resource* GetLinearDepth() const;
+    ID3D12Resource* GetOutputNormals() const;
+    ID3D12Resource* GetOutputDiffAlbedo() const;
+
     bool DispatchNrcQuery(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* depth,
                           ID3D12Resource* normals, ID3D12Resource* diffAlbedo,
                           ID3D12Resource* queryBuffer, ID3D12Device* dev, UINT queryCount);

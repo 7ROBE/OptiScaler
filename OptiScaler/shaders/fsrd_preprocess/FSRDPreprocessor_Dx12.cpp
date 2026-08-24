@@ -639,7 +639,8 @@ FSRDPreprocessor_Dx12::FSRDPreprocessor_Dx12(std::string_view name, ID3D12Device
     {
         m_impl->m_pDev = pDev;
         m_impl->Initialize(GetAsByteSpan(FSRDFloorSeed_cso), GetAsByteSpan(FSRDFloor_cso),
-                           GetAsByteSpan(FSRDInputConv_cso), GetAsByteSpan(FSRDOutputComp_cso), isMode2);
+                           GetAsByteSpan(FSRDInputConv_cso), GetAsByteSpan(FSRDOutputComp_cso), isMode2,
+                           GetAsByteSpan(FSRDNrcQuery_cso));
         m_IsInitialized = true;
     }
     catch (const std::exception& err)
@@ -667,6 +668,16 @@ bool FSRDPreprocessor_Dx12::SetMaxRenderSize(UINT width, UINT height)
     }
 
     return false;
+}
+
+ID3D12Resource* FSRDPreprocessor_Dx12::GetLinearDepth() const { return m_impl->m_LinearDepth.Get(); }
+ID3D12Resource* FSRDPreprocessor_Dx12::GetOutputNormals() const
+{
+    return m_impl->m_outputBuffer1.Get();
+}
+ID3D12Resource* FSRDPreprocessor_Dx12::GetOutputDiffAlbedo() const
+{
+    return m_impl->m_outputBuffer2.Get();
 }
 
 bool FSRDPreprocessor_Dx12::DispatchConversion(ID3D12GraphicsCommandList* cmdList, const ConversionDesc& desc)
