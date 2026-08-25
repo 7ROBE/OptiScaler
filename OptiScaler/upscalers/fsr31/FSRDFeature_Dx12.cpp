@@ -845,6 +845,21 @@ bool FSRDFeatureDx12::PrepareDenoiserInput(ID3D12GraphicsCommandList* InCommandL
     // Populate resources and link signal chain
     FSRDConvShader->GetSignal(signalDesc..., dispatchDesc);
     
+    // Scene-cut detection: menu transitions/cutscenes teleport the camera without the game
+    // sending NGX Reset, so stale history burns through into the new scene. A jump larger than
+    // any real per-frame camera movement forces a denoiser reset.
+    {
+        const float dx = _lastCamPos.x - camPos.x;
+        const float dy = _lastCamPos.y - camPos.y;
+        const float dz = _lastCamPos.z - camPos.z;
+        if (dx * dx + dy * dy + dz * dz > 25.0f) // >5m in one frame = scene cut
+        {
+            dispatchDesc.flags |= FFX_DENOISER_DISPATCH_RESET;
+            LOG_DEBUG("FSRD: scene cut detected (camera jumped %.1fm) - resetting denoiser history",
+                      sqrtf(dx * dx + dy * dy + dz * dz));
+        }
+    }
+
     if (_isInReset)
         dispatchDesc.flags |= FFX_DENOISER_DISPATCH_RESET;
 
