@@ -374,20 +374,22 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
 
             const float3 specularColor = denoiserColor * (specWeight * rcpTotalWeight);
             const float3 diffuseColor = denoiserColor - specularColor;
-            // RR 1.2.0 contract: signal input is RADIANCE (header: "Indirect diffuse radiance to
-            // denoise"). No demodulation - the DLL denoises in radiance space and only uses the
-            // albedo buffers as edge-stopping guidance. Dividing by albedo here amplified shadow
-            // noise before denoising (dirty NN inputs) and required lossless remodulation (blur).
 
-            half3 demodSpecular = GetSafeFP16(specularColor);
-            half3 demodDiffuse = GetSafeFP16(diffuseColor);
+            // Demodulation divisor floor: dividing by tiny albedo (shadows ~0.02) amplifies
+            // residual noise up to 50x - the root cause of dark-threshold collapse and shadow
+            // boiling. Floor the divisor so amplification never exceeds 20x (1/0.05).
+            // Hue-preserving: scalar divide by luminance-based floor, not per-channel max.
+            const float specDiv = max(GetLuminance(specReflectance.rgb), 0.1f);
+            const float diffDiv = max(GetLuminance(diffAlbedo.rgb), 0.1f);
+            half3 demodSpecular = GetSafeFP16(specularColor / specDiv);
+            half3 demodDiffuse = GetSafeFP16(diffuseColor / diffDiv);
 
             // Post-demod soft-knee: hybrid reference. Pure floor-referenced clamping crushed
             // legitimate bright sources in flame-lit scenes (the local signal IS the lighting).
             // A spike is an outlier relative to its own neighborhood - use the signal's local
             // brightness as the primary reference, with the floor only as a minimum guard.
             {
-                const float localRef = max(floorLuma, 0.02f);
+                const float localRef = max(floorLuma * rcp(max(diffDiv, 1e-3f)), 0.02f);
                 const float sLuma = GetLuminance(demodSpecular);
                 const float hiS = max(localRef * 3.0f, sLuma * 0.5f); // never clamp below half the local signal
                 if (sLuma > hiS)
@@ -399,12 +401,15 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
                     demodDiffuse *= half(hiD / dLuma);
             }
 
-            // Temporal signal stabilization for low-SNR regions: blend toward the temporally-
-            // stable floor radiance directly (same space as the signal now).
+            // Temporal signal stabilization for low-SNR regions: blend the noisy demodulated
+            // diffuse toward the temporally-stable floor-derived estimate. The floor has been
+            // accumulated across frames (noise-free); where the current signal is mostly noise
+            // (dark areas), leaning on it removes fireflies AND boiling at once.
             {
+                const float3 stableDiffuse = floorColor.rgb * rcp(max(diffAlbedo.rgb, float3(diffDiv, diffDiv, diffDiv)));
                 const float snr = saturate(floorLuma * 20.0f);   // near-black => low SNR
                 const float smoothW = (1.0f - snr) * 0.6f;       // up to 60% stable blend in shadows
-                demodDiffuse = GetSafeFP16(lerp(demodDiffuse, floorColor.rgb, half(smoothW)));
+                demodDiffuse = GetSafeFP16(lerp(demodDiffuse, half3(stableDiffuse), half(smoothW)));
             }
 
             // Anything that can't survive modulation and clamping should be skipped
