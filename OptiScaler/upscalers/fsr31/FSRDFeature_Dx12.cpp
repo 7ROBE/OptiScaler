@@ -796,6 +796,49 @@ bool FSRDFeatureDx12::PrepareDenoiserInput(ID3D12GraphicsCommandList* InCommandL
     if (!ConvertDenoiserBuffers(InCommandList))
         return false;
 
+    // NGX input scraper: periodic dump of every RR-relevant parameter the game provides,
+    // so input-side problems (missing guides, wrong scales, stale jitter) can be separated
+    // from denoiser-output problems.
+    static uint32_t s_ngxScrapeFrame = 0;
+    if (++s_ngxScrapeFrame % 120 == 0)
+    {
+        auto scrapeF = [&](const char* key, const char* name) {
+            float v = 0.0f;
+            if (inParams.Get(key, &v) == NVSDK_NGX_Result_Success)
+                LOG_DEBUG("NGX in: {0} = {1:.4f}", name, v);
+            else
+                LOG_DEBUG("NGX in: {0} = <missing>", name);
+        };
+        auto scrapeP = [&](const char* key, const char* name) {
+            void* p = nullptr;
+            LOG_DEBUG("NGX in: {0} = {1}", name,
+                      inParams.Get(key, &p) == NVSDK_NGX_Result_Success && p ? "ok" : "<null>");
+        };
+
+        LOG_DEBUG("NGX in scrape @ frame {0}:", s_ngxScrapeFrame);
+        scrapeF("Jitter.Offset.X", "Jitter.X");
+        scrapeF("Jitter.Offset.Y", "Jitter.Y");
+        scrapeF("MV.Scale.X", "MV.Scale.X");
+        scrapeF("MV.Scale.Y", "MV.Scale.Y");
+        scrapeF("DLSS.Input.Bias.Current.Color.Mask", "BiasColor.Mask");
+        scrapeF("DLSS.Camera.Far", "Camera.Far");
+        scrapeF("DLSS.Camera.Near", "Camera.Near");
+        scrapeF("DLSSG.CameraNear", "DLSSG.CameraNear");
+        scrapeF("DLSSG.CameraFar", "DLSSG.CameraFar");
+        scrapeF("Reset", "Reset");
+        scrapeP("Color", "Color");
+        scrapeP("MotionVectors", "MotionVectors");
+        scrapeP("Depth", "Depth");
+        scrapeP("DLSS.Input.DiffuseAlbedo", "DiffuseAlbedo");
+        scrapeP("DLSS.Input.SpecularAlbedo", "SpecularAlbedo");
+        scrapeP("DLSSD.SpecularHitDistance", "SpecHitDist");
+        scrapeP("Output", "Output");
+        scrapeP(NVSDK_NGX_Parameter_Color, "Color");
+        scrapeP(NVSDK_NGX_Parameter_MotionVectors, "MotionVectors");
+        scrapeP(NVSDK_NGX_Parameter_Depth, "Depth");
+
+    }
+
     // Camera matrix - translation and rotation, from viewMatrix^-1
     const XMFLOAT3 camPos = GetFloat3Column(_invViewMatrix, 3);
 
