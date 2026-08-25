@@ -177,18 +177,20 @@ void PopulateSharedMemory(const uint2 groupID, const int2 gtID)
             [branch]
             if (IsSet(FLAGS_MODE_2_SIGNAL))
             {
+                // Signals are RADIANCE now (no demodulation) - compose by direct sum.
                 const float3 denoisedSpecColor = InDenoisedSignal1[px].rgb;
                 const float3 denoisedDiffColor = InDenoisedSignal2[px].rgb;
                 const float3 specReflectance = InAlbedo1[px].rgb;
                 const float3 diffAlbedo = InAlbedo2[px].rgb;
-                
+
                 totalAlbedo = GetSafeFP16(specReflectance + diffAlbedo);
-                denoisedColor = GetSafeFP16((denoisedSpecColor * specReflectance) + (denoisedDiffColor * diffAlbedo));
+                denoisedColor = GetSafeFP16(denoisedSpecColor + denoisedDiffColor);
             }
             else
             {
+                // Mode-1 fused signal is also radiance - no remultiplication.
                 totalAlbedo = GetSafeFP16(InAlbedo1[px].rgb);
-                denoisedColor = GetSafeFP16(InDenoisedSignal1[px].rgb) * totalAlbedo;
+                denoisedColor = GetSafeFP16(InDenoisedSignal1[px].rgb);
             }
             
             const half3 rawColor = GetSafeFP16(InRawColor[px].rgb);
