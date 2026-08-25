@@ -372,8 +372,17 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             const float3 diffWeight = saturate(diffAlbedo.rgb);
             const float3 rcpTotalWeight = rcp(diffWeight + specWeight);
 
-            const float3 specularColor = denoiserColor * (specWeight * rcpTotalWeight);
-            const float3 diffuseColor = denoiserColor - specularColor;
+            // PRE-DEMOD VARIANCE REDUCTION: blend the raw radiance toward the temporally-
+            // stabilized floor BEFORE splitting AND before dividing by albedo.
+            // Var(X/a) = Var(X)/a^2: reducing variance here is quadratically more effective
+            // than any post-demod filter - this attacks shadow boiling at its source.
+                const float snrPre = saturate(floorLuma * 20.0f);       // near-black => low SNR
+                const float preDemodW = (1.0f - snrPre) * 0.5f;         // up to 50% floor in shadows
+                const float3 stabilizedRadiance =
+                    GetSafeFP16(lerp(denoiserColor, floorColor.rgb, half(preDemodW)));
+
+            const float3 specularColor = stabilizedRadiance * (specWeight * rcpTotalWeight);
+            const float3 diffuseColor = stabilizedRadiance - specularColor;
 
             // Demodulation divisor floor: dividing by tiny albedo (shadows ~0.02) amplifies
             // residual noise up to 50x - the root cause of dark-threshold collapse and shadow
