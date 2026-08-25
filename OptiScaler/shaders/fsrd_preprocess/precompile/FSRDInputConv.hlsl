@@ -421,7 +421,7 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             // Pass the real hit distance for all surfaces - zeroing it on rough/emissive pixels
             // tells the denoiser "immediate hit", which corrupts temporal accumulation and
             // blurs reflections. Emissive has no meaningful hit, keep a large sentinel instead.
-            hitDist = isEmissive ? half(1e4f) : GetSafeFP16(max(InSpecHitDist[px], 1e-4f)); // large sentinel for emissive
+            hitDist = isEmissive ? half(65504.0f) : GetSafeFP16(max(InSpecHitDist[px], 1e-4f)); // sample's miss sentinel
             
             [branch]
             if (!IsSet(FLAGS_DEBUG))
@@ -553,8 +553,9 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
         OutNormals[px] = 0.0f;
         OutSpecAlbedo[px] = 0.0f;
         OutDiffAlbedo[px] = 0.0f;
-        OutSignal1[px] = half4(0.0f, 0.0f, 0.0f, -1.0f); // negative alpha = invalid per RR docs
-        OutSignal2[px] = half4(0.0f, 0.0f, 0.0f, -1.0f);
+        // Match the sample's invalid-pixel encoding: zero radiance + infinite hit distance
+        OutSignal1[px] = half4(0.0f, 0.0f, 0.0f, 65504.0f);
+        OutSignal2[px] = half4(0.0f, 0.0f, 0.0f, 65504.0f);
         // Negative alpha marks this texel as INVALID for temporal floor reuse - the temporal
         // blend must not sample noisy raw color from skipped pixels (caused flashing).
         OutSkipSignal[px] = half4(rawColor, -1.0f);
