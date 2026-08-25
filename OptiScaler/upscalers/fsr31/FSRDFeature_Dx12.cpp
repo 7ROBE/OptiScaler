@@ -388,7 +388,9 @@ bool FSRDFeatureDx12::CreateDenoiserContext()
         return false;
 
     state.ffxDenoiserUpscalerVersion = Version();
-    parse_version(state.ffxDenoiserVersionNames[cfg.FfxDenoiserIndex.value_or_default()]);
+    const UINT denoiserIdx = std::min<UINT>(cfg.FfxDenoiserIndex.value_or_default(),
+                                            (UINT) state.ffxDenoiserVersionNames.size() - 1); // M7: clamp vs driver version list
+    parse_version(state.ffxDenoiserVersionNames[denoiserIdx]);
 
     // Get current mode and populate mode map
     _isMode2 = cfg.FfxDenoiserMode.value_or_default() == 0;
@@ -640,6 +642,15 @@ bool FSRDFeatureDx12::EvaluateInternal(ID3D12GraphicsCommandList* InCommandList,
     // repack input buffers into intermediate FSR-RR input buffers, and configure descriptors.
     // When the game isn't feeding RR inputs (RR disabled), skip the denoiser stage entirely -
     // the upscaler below then consumes the game's raw color directly, i.e. plain FSR behavior.
+    if (s_rrInputsMissing && _isMode2)
+    {
+        // M6: retry periodically - RR may be re-enabled without a feature recreation.
+        static uint32_t s_rrRetryCounter = 0;
+        if (++s_rrRetryCounter % 120 != 0)
+            return true; // still missing, plain-FSR fallback this frame
+        LOG_INFO("Retrying FSR-RR input detection after fallback period");
+    }
+
     if (!s_rrInputsMissing)
     {
         if (_isMode2)
@@ -982,9 +993,11 @@ bool FSRDFeatureDx12::PrepareDenoiseConvInput(const NVSDK_NGX_Parameter& inParam
         }
     }
 
-    // Derive handedness from the projection matrix: LH projects with w = +z, RH with w = -z.
-    // The Streamline fallback sets this, but the NGX-supplied matrix path never did.
-    _isRightHanded = _projMatrix.r[2].m128_f32[3] < 0.0f;
+    // Derive handedness from the projection matrix w-row (P-form): P[3][2] = +1 for LH, -1 for RH.
+    // Element [2][3] is the perspective-z term B which is <0 for standard and >0 for
+    // reverse-Z-infinite projections regardless of handedness - reading it silently flipped
+    // detection for {standard,LH} and {reverseZ,RH} cameras.
+    _isRightHanded = _projMatrix.r[3].m128_f32[2] < 0.0f;
 
     return isReady;
 }
@@ -1061,13 +1074,15 @@ bool FSRDFeatureDx12::ConvertDenoiserBuffers(ID3D12GraphicsCommandList* InComman
 
 static bool TryUpdateOption(const CustomOptional<float>& cfgValue, float& currentValue)
 {
+    // M5: 'auto' (no INI value) must not override the DLL's queried calibration.
+    if (!cfgValue.has_value())
+        return false;
     if (cfgValue.value_or_default() != currentValue)
     {
         currentValue = cfgValue.value_or_default();
         return true;
     }
-    else
-        return false;
+    return false;
 }
 
 bool FSRDFeatureDx12::DispatchDenoiser(ID3D12GraphicsCommandList* InCommandList,
@@ -1112,7 +1127,9 @@ bool FSRDFeatureDx12::DispatchDenoiser(ID3D12GraphicsCommandList* InCommandList,
     // cache learns from. Train every 4th frame: NN training is expensive and the cache
     // converges over many frames regardless; per-frame training burns ms for nothing.
     static uint32_t s_nrcFrameCounter = 0;
-    const bool nrcTrainThisFrame = _nrcReady && result == FFX_API_RETURN_OK && (++s_nrcFrameCounter % 4) == 0;
+    // M4: training disabled until the target-packing pass writes trainIn/trainTgt -
+    // otherwise we train on uninitialized DEFAULT-heap memory.
+    const bool nrcTrainThisFrame = false && _nrcReady && result == FFX_API_RETURN_OK && (++s_nrcFrameCounter % 4) == 0;
 
     if (nrcTrainThisFrame)
     {

@@ -283,7 +283,7 @@ struct FSRDPreprocessor_Dx12::Impl
 
         if (!nrcQueryByteCode.empty())
             m_nrcQueryShader.Initialize(m_pDev, nrcQueryByteCode, sizeof(NrcQueryConstants),
-                3u, 1u, L"FSRD_NrcQuery_Constants", FloorSeed::kBackBufferCount);
+                3u, 2u, L"FSRD_NrcQuery_Constants", FloorSeed::kBackBufferCount);
 
         LOG_DEBUG("FSRD interop shaders and resources initialized.");
     }
@@ -390,6 +390,11 @@ struct FSRDPreprocessor_Dx12::Impl
         // scale = 2^(i + 1) / norm
         float rcpCrossNorm = (1.0f / 0.5f);
         float rcpLumNorm = (1e-2f / 0.3f);
+
+        // H2 fix: guarantee InColor != OutColor for filter pass 0. After seeding, m_smoothFloor
+        // may alias m_outputBuffer2; swap so the first filter pass reads/writes distinct buffers.
+        if (m_smoothFloor == m_outputBuffer2.Get())
+            std::swap(m_outputBuffer1, m_outputBuffer2);
 
         for (int i = 0; i < FloorFilter::kPasses; i++)
         {
@@ -677,11 +682,11 @@ bool FSRDPreprocessor_Dx12::SetMaxRenderSize(UINT width, UINT height)
 ID3D12Resource* FSRDPreprocessor_Dx12::GetLinearDepth() const { return m_impl->m_LinearDepth.Get(); }
 ID3D12Resource* FSRDPreprocessor_Dx12::GetOutputNormals() const
 {
-    return m_impl->m_outputBuffer1.Get();
+    return m_impl->m_out.Resources.Normals.Get(); // converted normals, not denoised output
 }
 ID3D12Resource* FSRDPreprocessor_Dx12::GetOutputDiffAlbedo() const
 {
-    return m_impl->m_outputBuffer2.Get();
+    return m_impl->m_out.Resources.DiffAlbedo.Get(); // converted albedo, not denoised output
 }
 
 bool FSRDPreprocessor_Dx12::DispatchConversion(ID3D12GraphicsCommandList* cmdList, const ConversionDesc& desc)
@@ -710,8 +715,8 @@ void FSRDPreprocessor_Dx12::GetSignal(ffxDispatchDescDenoiserIndirectDiffuse& di
         .header = { .type = FFX_API_DISPATCH_DESC_TYPE_DENOISER_INDIRECT_DIFFUSE },
         .signal = 
         {
-            .input = ffxApiGetResourceDX12(signalData.Radiance.Get()),
-            .output = ffxApiGetResourceDX12(m_impl->m_outputBuffer1.Get())
+            .input = ffxApiGetResourceDX12(signalData.Radiance.Get(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ),
+            .output = ffxApiGetResourceDX12(m_impl->m_outputBuffer1.Get(), FFX_API_RESOURCE_STATE_UNORDERED_ACCESS)
         }
     };
 
@@ -730,8 +735,8 @@ void FSRDPreprocessor_Dx12::GetSignal(ffxDispatchDescDenoiserIndirectDiffuse& di
         .header = { .type = FFX_API_DISPATCH_DESC_TYPE_DENOISER_INDIRECT_SPECULAR }, 
         .signal = 
         {
-            .input = ffxApiGetResourceDX12(signalData.SpecRadiance.Get()),
-            .output = ffxApiGetResourceDX12(m_impl->m_outputBuffer1.Get())
+            .input = ffxApiGetResourceDX12(signalData.SpecRadiance.Get(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ),
+            .output = ffxApiGetResourceDX12(m_impl->m_outputBuffer1.Get(), FFX_API_RESOURCE_STATE_UNORDERED_ACCESS)
         }
     };
 
@@ -741,8 +746,8 @@ void FSRDPreprocessor_Dx12::GetSignal(ffxDispatchDescDenoiserIndirectDiffuse& di
         .header = { .type = FFX_API_DISPATCH_DESC_TYPE_DENOISER_INDIRECT_DIFFUSE, .pNext = &specularDesc.header },
         .signal = 
         {
-            .input = ffxApiGetResourceDX12(signalData.DiffRadiance.Get()),
-            .output = ffxApiGetResourceDX12(m_impl->m_outputBuffer2.Get())
+            .input = ffxApiGetResourceDX12(signalData.DiffRadiance.Get(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ),
+            .output = ffxApiGetResourceDX12(m_impl->m_outputBuffer2.Get(), FFX_API_RESOURCE_STATE_UNORDERED_ACCESS)
         }
     };
 
