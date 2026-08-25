@@ -433,10 +433,10 @@ bool FSRDFeatureDx12::CreateDenoiserContext()
             .pNext = &backendDesc.header
         },
         .version = FFX_DENOISER_VERSION,
-        // Match the sample: maxRenderSize uses the UPSCALED size, not render size.
-        // The DLL sizes its internal position tiles from this - using render size made
-        // the internal buffers half-res => blocky VCP/VHP debug views.
-        .maxRenderSize = { DisplayWidth(), DisplayHeight() },
+        // maxRenderSize must track RENDER size: the DLL lays out its debug-overview grid and
+        // internal tiles from this. Using display size squeezed all debug panels into the
+        // left half of the output (layout regression 2026-08-25).
+        .maxRenderSize = { RenderWidth(), RenderHeight() },
         .signalFlags = static_cast<uint32_t>(_isMode2 ? (FFX_DENOISER_SIGNAL_INDIRECT_DIFFUSE | FFX_DENOISER_SIGNAL_INDIRECT_SPECULAR)
                                 : FFX_DENOISER_SIGNAL_INDIRECT_DIFFUSE),
         // Full-res DLSS-RR inputs - no checkerboard reconstruction on the translation path
@@ -576,10 +576,9 @@ void FSRDFeatureDx12::UpdateSize()
 {
     // FSR-RR doesn't currently have proper DRS support. The example implementation 
     // reinits on resolution change as well.
-    // maxRenderSize stores DISPLAY size now - compare against display, not render.
     const bool needsReInit = 
-        _denoiserCtxDesc.maxRenderSize.width != DisplayWidth() ||
-        _denoiserCtxDesc.maxRenderSize.height != DisplayHeight();
+        _denoiserCtxDesc.maxRenderSize.width != RenderWidth() ||
+        _denoiserCtxDesc.maxRenderSize.height != RenderHeight();
 
     if (needsReInit)
     {
