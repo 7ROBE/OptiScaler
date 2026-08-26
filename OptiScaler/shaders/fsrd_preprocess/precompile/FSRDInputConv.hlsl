@@ -442,7 +442,8 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
                 if (wSum > 1e-4f)
                 {
                     const half3 prevSignal = (s00.rgb * w00 + s10.rgb * w10 + s01.rgb * w01 + s11.rgb * w11) / half(wSum);
-                    const half prevW = saturate(half((s00.a + s10.a + s01.a + s11.a) * 0.25f));
+                    half prevW = saturate(half((s00.a + s10.a + s01.a + s11.a) * 0.25f));
+                    if (isnan(prevW) || isinf(prevW)) prevW = 0.0h; // uninitialized history => fresh start
 
                     // Similarity gate: reject history when current signal disagrees wildly
                     // (lighting change / disocclusion the MVs didn't catch)
