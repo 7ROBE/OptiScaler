@@ -521,7 +521,9 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
         
         OutSpecAlbedo[px] = half4(GetSafeFP16(specReflectance), 0.0f);
         OutDiffAlbedo[px] = half4(GetSafeFP16(diffAlbedo), 0.0f);
-        OutSkipSignal[px] = half4(GetSafeFP16(floorColor));
+        // Full-radiance architecture: the NN output IS the complete lighting estimate.
+        // Nothing is re-added in composition (alpha=1 with rgb=0 keeps legacy math a no-op).
+        OutSkipSignal[px] = half4(0.0f, 0.0f, 0.0f, 1.0f);
         
         [branch]
         if (IsSet(FLAGS_DEBUG))
