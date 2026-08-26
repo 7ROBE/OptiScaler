@@ -377,8 +377,10 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             // stabilized floor BEFORE splitting AND before dividing by albedo.
             // Var(X/a) = Var(X)/a^2: reducing variance here is quadratically more effective
             // than any post-demod filter - this attacks shadow boiling at its source.
-                const float snrPre = saturate(floorLuma * 20.0f);       // near-black => low SNR
-                const float preDemodW = (1.0f - snrPre) * 0.5f;         // up to 50% floor in shadows
+                // Aggressive in true darkness: at floorLuma<=0.02 raw signal is >90% noise,
+                // and demod would amplify it 10-50x before the NN sees it.
+                const float snrPre = saturate(floorLuma * 10.0f);       // full trust by luma 0.1
+                const float preDemodW = (1.0f - snrPre) * 0.9f;         // up to 90% floor in shadows
                 const float3 stabilizedRadiance =
                     GetSafeFP16(lerp(denoiserColor, floorColor.rgb, half(preDemodW)));
 
@@ -418,8 +420,8 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             // (dark areas), leaning on it removes fireflies AND boiling at once.
             {
                 const float3 stableDiffuse = floorColor.rgb / diffDiv;
-                const float snr = saturate(floorLuma * 20.0f);   // near-black => low SNR
-                const float smoothW = (1.0f - snr) * 0.6f;       // up to 60% stable blend in shadows
+                const float snr = saturate(floorLuma * 10.0f);   // near-black => low SNR
+                const float smoothW = (1.0f - snr) * 0.8f;       // up to 80% stable blend in shadows
                 demodDiffuse = GetSafeFP16(lerp(demodDiffuse, half3(stableDiffuse), half(smoothW)));
             }
 
