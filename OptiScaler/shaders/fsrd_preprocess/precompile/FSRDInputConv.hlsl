@@ -373,19 +373,12 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             const float3 diffWeight = saturate(diffAlbedo.rgb);
             const float3 rcpTotalWeight = rcp(diffWeight + specWeight);
 
-            // PRE-DEMOD VARIANCE REDUCTION: blend the raw radiance toward the temporally-
-            // stabilized floor BEFORE splitting AND before dividing by albedo.
-            // Var(X/a) = Var(X)/a^2: reducing variance here is quadratically more effective
-            // than any post-demod filter - this attacks shadow boiling at its source.
-                // Aggressive in true darkness: at floorLuma<=0.02 raw signal is >90% noise,
-                // and demod would amplify it 10-50x before the NN sees it.
-                const float snrPre = saturate(floorLuma * 10.0f);       // full trust by luma 0.1
-                const float preDemodW = (1.0f - snrPre) * 0.9f;         // up to 90% floor in shadows
-                const float3 stabilizedRadiance =
-                    GetSafeFP16(lerp(denoiserColor, floorColor.rgb, half(preDemodW)));
+                        // No pre-demod blending: FSR-RR's NN handles raw noisy inputs natively (the AMD
+            // sample feeds grainy irradiance directly). Floor blending trades noise for blur -
+            // the NN can remove noise; it cannot recover blurred detail. Keep the input HONEST.
 
-            const float3 specularColor = stabilizedRadiance * (specWeight * rcpTotalWeight);
-            const float3 diffuseColor = stabilizedRadiance - specularColor;
+            const float3 specularColor = denoiserColor * (specWeight * rcpTotalWeight);
+            const float3 diffuseColor = denoiserColor - specularColor;
 
             // Demodulation with per-channel divisor floor: dividing a channel by tiny albedo
             // amplifies that channel's noise; a scalar luminance floor lets dark channels get
@@ -418,12 +411,7 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             // diffuse toward the temporally-stable floor-derived estimate. The floor has been
             // accumulated across frames (noise-free); where the current signal is mostly noise
             // (dark areas), leaning on it removes fireflies AND boiling at once.
-            {
-                const float3 stableDiffuse = floorColor.rgb / diffDiv;
-                const float snr = saturate(floorLuma * 10.0f);   // near-black => low SNR
-                const float smoothW = (1.0f - snr) * 0.8f;       // up to 80% stable blend in shadows
-                demodDiffuse = GetSafeFP16(lerp(demodDiffuse, half3(stableDiffuse), half(smoothW)));
-            }
+             // No post-demod stabilization: blur destroys what the NN needs.
 
             // Anything that can't survive modulation and clamping should be skipped
             const float3 remodColor = (demodSpecular * specReflectance.rgb) + (demodDiffuse * diffAlbedo.rgb);
