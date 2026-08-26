@@ -384,12 +384,12 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             const float3 specularColor = stabilizedRadiance * (specWeight * rcpTotalWeight);
             const float3 diffuseColor = stabilizedRadiance - specularColor;
 
-            // Demodulation divisor floor: dividing by tiny albedo (shadows ~0.02) amplifies
-            // residual noise up to 50x - the root cause of dark-threshold collapse and shadow
-            // boiling. Floor the divisor so amplification never exceeds 20x (1/0.05).
-            // Hue-preserving: scalar divide by luminance-based floor, not per-channel max.
-            const float specDiv = max(GetLuminance(specReflectance.rgb), 0.1f);
-            const float diffDiv = max(GetLuminance(diffAlbedo.rgb), 0.1f);
+            // Demodulation with per-channel divisor floor: dividing a channel by tiny albedo
+            // amplifies that channel's noise; a scalar luminance floor lets dark channels get
+            // up to 10x more amplification than bright ones, shifting chroma. Per-channel
+            // floors cap every channel at the same 10x (1/0.1).
+            const float3 specDiv = max(specReflectance.rgb, float3(0.1f, 0.1f, 0.1f));
+            const float3 diffDiv = max(diffAlbedo.rgb, float3(0.1f, 0.1f, 0.1f));
             half3 demodSpecular = GetSafeFP16(specularColor / specDiv);
             half3 demodDiffuse = GetSafeFP16(diffuseColor / diffDiv);
 
@@ -398,7 +398,8 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             // A spike is an outlier relative to its own neighborhood - use the signal's local
             // brightness as the primary reference, with the floor only as a minimum guard.
             {
-                const float localRef = max(floorLuma * rcp(max(diffDiv, 1e-3f)), 0.02f);
+                const float diffDivLum = GetLuminance(diffAlbedo.rgb);
+                const float localRef = max(floorLuma * rcp(max(diffDivLum, 1e-3f)), 0.02f);
                 const float sLuma = GetLuminance(demodSpecular);
                 const float hiS = max(localRef * 3.0f, sLuma * 0.5f); // never clamp below half the local signal
                 if (sLuma > hiS)
@@ -415,7 +416,7 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             // accumulated across frames (noise-free); where the current signal is mostly noise
             // (dark areas), leaning on it removes fireflies AND boiling at once.
             {
-                const float3 stableDiffuse = floorColor.rgb * rcp(max(diffAlbedo.rgb, float3(diffDiv, diffDiv, diffDiv)));
+                const float3 stableDiffuse = floorColor.rgb / diffDiv;
                 const float snr = saturate(floorLuma * 20.0f);   // near-black => low SNR
                 const float smoothW = (1.0f - snr) * 0.6f;       // up to 60% stable blend in shadows
                 demodDiffuse = GetSafeFP16(lerp(demodDiffuse, half3(stableDiffuse), half(smoothW)));
