@@ -294,21 +294,21 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
         floorColor.rgb = clamped;
     }
     
-    // Signal denoising pre-pass: compress fireflies/outliers in the residual BEFORE demodulation.
-    // The demod division (color / albedo) amplifies any residual noise by 1/albedo - a single bright
-    // spike on a dark albedo becomes a huge signal outlier that survives FFX-RR's filtering and shows
-    // up as NN INPUT1/2 salt-and-pepper. Soft-knee the residual against the smoothed floor luma:
-    // deviations within the noise envelope pass, large spikes are compressed toward it.
-    float3 signalColor = rawColor - floorColor.rgb;
+    // HONEST SIGNAL: feed the NN the complete demodulated radiance, exactly like the AMD sample's
+    // tracer feeds its denoiser. The old residual-only path (raw - blurredFloor) destroyed all
+    // low-frequency detail pre-NN and re-broadcast it blurred via SkipSignal - the structural
+    // cause of the vaseline look. Fireflies are clamped generously (true energy spikes only).
+    float3 signalColor = rawColor;
     {
-        const float residualLuma = GetLuminance(signalColor);
+        const float signalLuma = GetLuminance(signalColor);
         const float floorRef = max(floorLuma, 1e-3f);
-        const float spikeLimit = floorRef * 2.0f + 0.05f; // noise envelope scales with local brightness
-        
-        if (residualLuma > spikeLimit)
+        const float spikeLimit = floorRef * 4.0f + 0.05f;
+
+        if (signalLuma > spikeLimit)
         {
-            const float compressed = spikeLimit + (residualLuma - spikeLimit) * 0.15f;
-            signalColor *= compressed / residualLuma; // preserve chroma ratio, scale magnitude
+            const float excess = signalLuma - spikeLimit;
+            const float compressed = spikeLimit + excess * 0.4f;
+            signalColor *= compressed / signalLuma;
         }
     }
     const float3 denoiserColor = max(signalColor, 0.0f);
