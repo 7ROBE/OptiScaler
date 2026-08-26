@@ -481,7 +481,10 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             if (!IsSet(FLAGS_DEBUG))
             {
                 OutSignal1[px] = half4(demodSpecular, hitDist);
-                OutSignal2[px] = half4(demodDiffuse, 0.0f);
+                // Diffuse signal alpha MUST carry a real distance: alpha=0 reads as
+                // "immediate hit" on every pixel, forcing the denoiser into maximum
+                // filtering (the blur). Specular hit distance is the best proxy we have.
+                OutSignal2[px] = half4(demodDiffuse, hitDist);
             }
             else
                 demodColor = demodDiffuse + demodSpecular;
