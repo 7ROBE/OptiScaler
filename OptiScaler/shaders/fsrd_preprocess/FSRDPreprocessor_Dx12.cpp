@@ -254,6 +254,7 @@ struct FSRDPreprocessor_Dx12::Impl
 
     // Previous frame's skip signal (temporally stabilized floor) - read by the packing shader
     ComPtr<ID3D12Resource> m_FloorHistory;
+    ComPtr<ID3D12Resource> m_SignalHistory;
 
     // Floor filter
     ID3D12Resource* m_smoothFloor;
@@ -307,6 +308,7 @@ struct FSRDPreprocessor_Dx12::Impl
         outResources.SpecAlbedo = CreateTex(FSRDFormats::SpecAlbedo, L"FSR_Conv_SpecAlbedo");
         outResources.DiffAlbedo = CreateTex(FSRDFormats::DiffAlbedo, L"FSR_Conv_DiffAlbedo");
         outResources.SkipSignal = CreateTex(FSRDFormats::SkipSignal, L"FSR_Conv_SkipSignal");
+        outResources.SignalHistory = CreateTex(FSRDFormats::SkipSignal, L"FSR_Conv_SignalHistOut");
 
         m_LinearDepth = CreateTex(FSRDFormats::LinearDepth, L"FSR_Conv_LinearDepth");
         m_outputBuffer1 = CreateTex(FSRDFormats::OutputBuffer1, L"FSR_Conv_OutputBuffer1");
@@ -315,6 +317,7 @@ struct FSRDPreprocessor_Dx12::Impl
 
         // Temporal floor history - previous frame's skip signal for floor stabilization
         m_FloorHistory = CreateTex(FSRDFormats::SkipSignal, L"FSR_Conv_FloorHistory");
+        m_SignalHistory = CreateTex(FSRDFormats::SkipSignal, L"FSR_Conv_SignalHistory");
 
         m_smoothFloor = nullptr;
 
@@ -454,6 +457,7 @@ struct FSRDPreprocessor_Dx12::Impl
 
         in.Resources.InBlurColor = m_smoothFloor;
         in.Resources.InPrevFloorColor = m_FloorHistory.Get();
+        in.Resources.InPrevSignal = m_SignalHistory.Get();
 
         // Capture for the NRC query pass (same frame matrices)
         m_nrcInvViewMatrix = desc.InvViewMatrix;
@@ -472,6 +476,13 @@ struct FSRDPreprocessor_Dx12::Impl
         AddBarrier(cmdList, m_FloorHistory.Get(), kSrvState, D3D12_RESOURCE_STATE_COPY_DEST);
         cmdList->CopyResource(m_FloorHistory.Get(), m_out.Resources.SkipSignal.Get());
         AddBarrier(cmdList, m_FloorHistory.Get(), D3D12_RESOURCE_STATE_COPY_DEST, kSrvState);
+
+        // Signal history: the shader itself writes accumulated signal to OutSignalHistory (u7).
+        // Copy it into the persistent history for next frame's SRV bind.
+        AddBarrier(cmdList, m_out.Resources.SignalHistory.Get(), kUavState, D3D12_RESOURCE_STATE_COPY_DEST);
+        AddBarrier(cmdList, m_SignalHistory.Get(), kSrvState, D3D12_RESOURCE_STATE_COPY_DEST);
+        cmdList->CopyResource(m_SignalHistory.Get(), m_out.Resources.SignalHistory.Get());
+        AddBarrier(cmdList, m_SignalHistory.Get(), D3D12_RESOURCE_STATE_COPY_DEST, kSrvState);
     }
 
     bool DispatchNrcQuery(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* depth,

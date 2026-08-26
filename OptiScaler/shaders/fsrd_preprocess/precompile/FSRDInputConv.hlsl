@@ -4,8 +4,8 @@
 #define MainRS \
     "RootFlags(0), " \
     "CBV(b0), " \
-    "DescriptorTable(SRV(t0, numDescriptors = 11), visibility = SHADER_VISIBILITY_ALL), " \
-    "DescriptorTable(UAV(u0, numDescriptors = 7), visibility = SHADER_VISIBILITY_ALL), "
+    "DescriptorTable(SRV(t0, numDescriptors = 12), visibility = SHADER_VISIBILITY_ALL), " \
+    "DescriptorTable(UAV(u0, numDescriptors = 8), visibility = SHADER_VISIBILITY_ALL), "
 
 // Dispatch config
 #define THREAD_GROUP_SIZE_X     8
@@ -70,6 +70,11 @@ Texture2D<half4> InFloorColor : register(t9);
 // floor (gated by similarity) removes that temporal noise.
 Texture2D<half4> InPrevFloorColor : register(t10);
 
+// Previous frame's accumulated diffuse signal (reprojected temporal accumulation).
+// This is proper TAA-style averaging: noise variance drops ~1/N over N frames while
+// detail is preserved (unlike spatial blur or non-reprojected floor blending).
+Texture2D<half4> InPrevSignal : register(t11);
+
 // FSR-RR - ffxDispatchDescDenoiserInput1Signal or ffxDispatchDescDenoiserInput2Signals
 //
 // Mode 1: RGB: Noisy fused lighting
@@ -87,6 +92,9 @@ RWTexture2D<half4> OutSpecAlbedo : register(u4); // RGB: Specular Albedo, A: dot
 RWTexture2D<half4> OutDiffAlbedo : register(u5); // RGB: Diffuse Albedo, A: Metalness (not provided)
 
 RWTexture2D<half4> OutSkipSignal : register(u6);
+
+// Accumulated diffuse signal for next frame's temporal blend
+RWTexture2D<half4> OutSignalHistory : register(u7);
 
 cbuffer CB_Packing : register(b0)
 {
@@ -407,11 +415,55 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
                     demodDiffuse *= half(hiD / dLuma);
             }
 
-            // Temporal signal stabilization for low-SNR regions: blend the noisy demodulated
-            // diffuse toward the temporally-stable floor-derived estimate. The floor has been
-            // accumulated across frames (noise-free); where the current signal is mostly noise
-            // (dark areas), leaning on it removes fireflies AND boiling at once.
-             // No post-demod stabilization: blur destroys what the NN needs.
+            half accumWeight = 0.35f;
+
+            // REPROJECTED TEMPORAL ACCUMULATION (TAA-style, in signal space):
+            // average this frame's demodulated diffuse with last frame's accumulated value
+            // sampled at the reprojected position. Variance drops ~1/N over N frames while
+            // detail is preserved - this is how real path tracers accumulate, not blur.
+            if (inBounds && !IsSet(FLAGS_CAMERA_CUT))
+            {
+                const float2 fS = frac(prevCoord);
+                const int2 cS = int2(floor(prevCoord));
+                const int2 cpS = min(cS + int2(1, 1), int2(DstTexSize.xy) - 1);
+
+                const half4 s00 = InPrevSignal[cS];
+                const half4 s10 = InPrevSignal[int2(cpS.x, cS.y)];
+                const half4 s01 = InPrevSignal[int2(cS.x, cpS.y)];
+                const half4 s11 = InPrevSignal[cpS];
+
+                // Alpha carries per-texel accumulation weight; invalid = negative
+                const float w00 = s00.a >= 0.0h ? (1.0f - fS.x) * (1.0f - fS.y) : 0.0f;
+                const float w10 = s10.a >= 0.0h ? fS.x * (1.0f - fS.y) : 0.0f;
+                const float w01 = s01.a >= 0.0h ? (1.0f - fS.x) * fS.y : 0.0f;
+                const float w11 = s11.a >= 0.0h ? fS.x * fS.y : 0.0f;
+                const float wSum = w00 + w10 + w01 + w11;
+
+                if (wSum > 1e-4f)
+                {
+                    const half3 prevSignal = (s00.rgb * w00 + s10.rgb * w10 + s01.rgb * w01 + s11.rgb * w11) / half(wSum);
+                    const half prevW = saturate(half((s00.a + s10.a + s01.a + s11.a) * 0.25f));
+
+                    // Similarity gate: reject history when current signal disagrees wildly
+                    // (lighting change / disocclusion the MVs didn't catch)
+                    const float sim = GetRelativeSimilarity(GetLuminance(demodDiffuse), GetLuminance(prevSignal), 0.3f);
+                    const float histBlend = sim * lerp(0.5f, 0.9f, velStep) * prevW;
+
+                    demodDiffuse = GetSafeFP16(lerp(demodDiffuse, prevSignal, half(histBlend)));
+                    accumWeight = half(max(histBlend, 0.35f)); // keep feeding the accumulator
+                }
+                else
+                {
+                    accumWeight = 0.35f; // fresh pixel
+                }
+            }
+            else
+            {
+                accumWeight = IsSet(FLAGS_CAMERA_CUT) ? half(0.0f) : half(0.35f);
+            }
+
+            // Store accumulated diffuse signal (+weight in A) for next frame
+            OutSignalHistory[px] = half4(demodDiffuse, accumWeight);
 
             // Anything that can't survive modulation and clamping should be skipped
             const float3 remodColor = (demodSpecular * specReflectance.rgb) + (demodDiffuse * diffAlbedo.rgb);

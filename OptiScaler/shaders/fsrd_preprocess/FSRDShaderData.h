@@ -175,6 +175,7 @@ namespace FSRD
 
                 ID3D12Resource* InBlurColor;
                 ID3D12Resource* InPrevFloorColor; // Temporally smoothed floor from the previous frame (t10)
+                ID3D12Resource* InPrevSignal;     // Accumulated diffuse signal from the previous frame (t11)
                 ID3D12Resource* InEdgeGuide;
             };
 
@@ -206,6 +207,7 @@ namespace FSRD
                 ComPtr<ID3D12Resource> DiffAlbedo; // RGB: Diffuse Albedo, A: Metalness (heuristic approximate) - RGBA8_UNORM
 
                 ComPtr<ID3D12Resource> SkipSignal;
+                ComPtr<ID3D12Resource> SignalHistory; // rgb=accumulated diffuse signal, a=weight - RGBA16_FLOAT
 
                 Data() {}
                 ~Data() {}
