@@ -984,6 +984,11 @@ bool FSRDFeatureDx12::PrepareDenoiseConvInput(const NVSDK_NGX_Parameter& inParam
     // Optional. Specular hit distance can be used with mode-2 denoising to track movement inside reflections, 
     // in addition to primary motion tracking for the surface and camera.
     TryGetLoggedResource(inParams, NVSDK_NGX_Parameter_DLSSD_SpecularHitDistance, _convDesc.Resources.InSpecHitDist);
+    if (_convDesc.Resources.InSpecHitDist == nullptr) // e.g. SH2/UE5 omits it
+    {
+        _convDesc.Flags |= (uint32_t) FSRDConvFlags::NoSpecHitDist;
+        LOG_DEBUG("FSRD: no SpecularHitDist from game - using 65504 sentinel");
+    }
     
     // Get DLSSD matrices and derive related values
     // World to view/camera space (V)

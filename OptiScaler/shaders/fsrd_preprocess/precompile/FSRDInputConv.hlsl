@@ -21,6 +21,7 @@ static const uint2 s_ThreadGroupSize = uint2(THREAD_GROUP_SIZE_X, THREAD_GROUP_S
 #define FLAGS_MODE_2_SIGNAL             (1 << 3)
 #define FLAGS_RIGHT_HANDED              (1 << 4)
 #define FLAGS_CAMERA_CUT                (1 << 5)
+#define FLAGS_NO_SPEC_HIT_DIST          (1 << 6)
 
 // Debug Flags
 #define FLAGS_DEBUG                     (1 << 16)
@@ -431,7 +432,8 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             // Pass the real hit distance for all surfaces - zeroing it on rough/emissive pixels
             // tells the denoiser "immediate hit", which corrupts temporal accumulation and
             // blurs reflections. Emissive has no meaningful hit, keep a large sentinel instead.
-            hitDist = isEmissive ? half(65504.0f) : GetSafeFP16(max(InSpecHitDist[px], 1e-4f)); // sample's miss sentinel
+            hitDist = (isEmissive || IsSet(FLAGS_NO_SPEC_HIT_DIST)) ? half(65504.0f)
+                     : GetSafeFP16(max(InSpecHitDist[px], 1e-4f));
             
             [branch]
             if (!IsSet(FLAGS_DEBUG))
@@ -457,7 +459,8 @@ void CSMain(uint3 groupID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
             [branch]
             if (!IsSet(FLAGS_DEBUG))
             {
-                OutSignal1[px] = half4(demodColor, max(hitDist, GetSafeFP16(max(InSpecHitDist[px], 1e-4f))));
+                const float m1hit = IsSet(FLAGS_NO_SPEC_HIT_DIST) ? 65504.0f : max(InSpecHitDist[px], 1e-4f);
+                OutSignal1[px] = half4(demodColor, max(hitDist, GetSafeFP16(m1hit)));
                 OutSignal2[px] = half4(GetSafeFP16(fusedAlbedo), 0.0f);
             }
         }        
